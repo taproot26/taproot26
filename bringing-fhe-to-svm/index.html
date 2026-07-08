@@ -67,6 +67,22 @@
   </div>
 
   <script src="../theme.js"></script>
+
+  <section id="feedback" class="feedback-section" data-slug="bringing-fhe-to-svm">
+    <h2 class="feedback-title">Feedback</h2>
+    <div id="feedback-error" class="feedback-error" style="display:none;"></div>
+    <div id="feedback-list" class="feedback-list"></div>
+    <form id="feedback-form" class="feedback-form">
+      <input type="text" id="feedback-name" class="feedback-input" placeholder="Name (optional)">
+      <textarea id="feedback-body" class="feedback-textarea" placeholder="Leave feedback..." required></textarea>
+      <button type="submit" class="feedback-submit">Post Feedback</button>
+    </form>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="../supabase-config.js"></script>
+  <script src="../feedback-render.js"></script>
+  <script src="../feedback.js"></script>
 </body>
 </html>
 
