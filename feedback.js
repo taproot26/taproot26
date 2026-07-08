@@ -69,6 +69,7 @@
         listEl.insertAdjacentHTML('beforeend', FeedbackRender.renderFeedbackItem(res.data[0]));
         bodyEl.value = '';
         nameEl.value = '';
+        if (window.trackEvent) window.trackEvent('comment_submitted', { post_slug: slug });
       });
   });
 
