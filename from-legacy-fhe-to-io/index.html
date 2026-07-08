@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>From Legacy FHE to iO - Taproot's Blog</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>
+    // Apply saved color scheme before first paint to avoid a flash on navigation
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('scheme'));
+        if (!s && localStorage.getItem('theme') === 'light') {
+          s = { bg: '#ffffff', text: '#000000', accent: '#000000', dark: false };
+        }
+        if (!s || !s.bg) return;
+        var base = s.dark ? '255, 255, 255' : '0, 0, 0';
+        var o = s.dark
+          ? { card: '0.05', border: '0.1', hover: '0.1', date: '0.6', cBg: '0.1', cBorder: '0.2', cHover: '0.15' }
+          : { card: '0.03', border: '0.1', hover: '0.05', date: '0.6', cBg: '0.05', cBorder: '0.1', cHover: '0.1' };
+        var r = document.documentElement.style;
+        r.setProperty('--bg', s.bg);
+        r.setProperty('--text', s.text);
+        r.setProperty('--accent', s.accent);
+        r.setProperty('--accent-dim', s.accent);
+        r.setProperty('--card-bg', 'rgba(' + base + ', ' + o.card + ')');
+        r.setProperty('--card-border', 'rgba(' + base + ', ' + o.border + ')');
+        r.setProperty('--card-bg-hover', 'rgba(' + base + ', ' + o.hover + ')');
+        r.setProperty('--date', 'rgba(' + base + ', ' + o.date + ')');
+        r.setProperty('--control-bg', 'rgba(' + base + ', ' + o.cBg + ')');
+        r.setProperty('--control-border', 'rgba(' + base + ', ' + o.cBorder + ')');
+        r.setProperty('--control-bg-hover', 'rgba(' + base + ', ' + o.cHover + ')');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div class="blog-post-container">
+    <nav class="blog-nav">
+      <a href="/">← Back to Blog</a>
+    </nav>
+    
+    <article class="blog-post">
+      <h1 class="blog-post-title">From Legacy FHE to iO</h1>
+      
+      <div class="blog-content">
+        <p><strong>TLDR:</strong> Does Root iO obsolete legacy FHE Co-Processors? According to many, we should salvage/convert existing legacy FHE infrastructure to prepare for iO. In the meantime some will still use FHE for shared private state construction, even if it requires a threshold decryption network. I suspect many people (such as Vialitk) won't accept FHE unless iO vouches. How can something like FHE be considered the "holy grail" of cryptography if it requires an active threshold decryption network dependency (t-of-n). I think that title rightfully belongs to iO as it's theoretically more performant and secure.</p>
+
+        <p>I initially learned about FHE back in 2023. At the time I was working on some EVM copy pasta game when I wanted to figure out how to make a simple combat engine. I was getting to a point where I was fairly satisfied with the initial PvE mechanics and needed to move to PvP. I went to PSE at the time and got a template, I think at the time it might’ve been the Sudoku example. After completing the demo, I asked how it could be used for encrypting an input (think rock paper scissors) but that wasn’t public so the player going second can’t backrun. Essentially the best method was an interactive commit-reveal scheme. It was at this moment I began to think that maybe zk wasn’t the privacy end game.</p>
+
+        <p>I began to Google around and eventually I came across Sunscreen and their FHE docs. I recognized them for the ETH NYC discord or something, I think they were a sponsor. Actually big bro Remi Gai (founder Inco) was the first person to talk to me about FHE. After this he guided me through how to create a simple RPS app using Zama's fhevm. I was amazed, it seemed like exactly what I was looking for. What if I could just encrypt a uintX in solidity and add, mul etc. After getting a finalist for our Mafia game app, I began working for Fhenix for about a year and a half. Had a good run at Fhenix, learned a lot and finally joined the crypto "work" world or whatever it's called. It was actually with the Guys in Bangkok last year I first learned wtf iO was. I barely understood it, but it kinda seemed like a better version of FHE in some ways as it obfuscated the program but was computationally infeasible.</p>
+
+        <p>Eventually I ended up leaving Fhenix to work on an FHE coprocessor for the SVM. Solana seemed like the next logical step and in some ways seemed better for a pointer based system using tfhe-rs. Anyways after getting to know the Arcium team, it seemed that the shared state privacy niche was filled. After working with my friend Vitor on some FHE perps stuff, I began to think if I even wanted to do this FHE product stuff anymore. But then my lord and savior iO came to my rescue.</p>
+
+        <p>To me this is the question I've been thinking about for the past few weeks. DevCon 2025 was a good time, I mean overall it was nice to see friends and see what new stuff is going on in privacy. For Eth Global the boys and I developed OpenIo, the world's first indistinguishability/Ideal Obfuscation coprocessor. Our project was greatly inspired by PSE's Machina iO, specifically their diamond iO repo and the recent Root iO paper. Personally I'm a huge fan of their work, not to glaze lol.</p>
+      </div>
+    </article>
+  </div>
+  
+  <script src="../theme.js"></script>
+</body>
+</html>
+

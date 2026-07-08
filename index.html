@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Taproot World</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply saved color scheme before first paint to avoid a flash on navigation
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('scheme'));
+        if (!s && localStorage.getItem('theme') === 'light') {
+          s = { bg: '#ffffff', text: '#000000', accent: '#000000', dark: false };
+        }
+        if (!s || !s.bg) return;
+        var base = s.dark ? '255, 255, 255' : '0, 0, 0';
+        var o = s.dark
+          ? { card: '0.05', border: '0.1', hover: '0.1', date: '0.6', cBg: '0.1', cBorder: '0.2', cHover: '0.15' }
+          : { card: '0.03', border: '0.1', hover: '0.05', date: '0.6', cBg: '0.05', cBorder: '0.1', cHover: '0.1' };
+        var r = document.documentElement.style;
+        r.setProperty('--bg', s.bg);
+        r.setProperty('--text', s.text);
+        r.setProperty('--accent', s.accent);
+        r.setProperty('--accent-dim', s.accent);
+        r.setProperty('--card-bg', 'rgba(' + base + ', ' + o.card + ')');
+        r.setProperty('--card-border', 'rgba(' + base + ', ' + o.border + ')');
+        r.setProperty('--card-bg-hover', 'rgba(' + base + ', ' + o.hover + ')');
+        r.setProperty('--date', 'rgba(' + base + ', ' + o.date + ')');
+        r.setProperty('--control-bg', 'rgba(' + base + ', ' + o.cBg + ')');
+        r.setProperty('--control-border', 'rgba(' + base + ', ' + o.cBorder + ')');
+        r.setProperty('--control-bg-hover', 'rgba(' + base + ', ' + o.cHover + ')');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1 class="welcome-text">Ramblings</h1>
+
+    <div class="categories">
+    <section class="category">
+      <h2 class="category-title">Technical</h2>
+      <ul class="list">
+        <li class="list-item">
+          <a href="/from-legacy-fhe-to-io">From Legacy FHE to IO</a>
+          <span class="article-date">December 2, 2025</span>
+        </li>
+        <li class="list-item">
+          <a href="/bringing-fhe-to-svm">Bringing Fully Homomorphic Encryption to the Solana Virtual Machine</a>
+          <span class="article-date">March 3, 2025</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="category">
+      <h2 class="category-title">Lifestyle</h2>
+      <ul class="list">
+        <li class="list-item">
+          <a href="/i-think-i-believe-in-love-again">I Think I Believe in Love Again</a>
+          <span class="article-date">April 9, 2026</span>
+        </li>
+        <li class="list-item">
+          <a href="/dystopia-utopia">Dystopia for the Masses - Utopia for the Few</a>
+          <span class="article-date">February 2, 2026</span>
+        </li>
+        <li class="list-item">
+          <a href="/data-wars">Data Wars</a>
+          <span class="article-date">January 19, 2026</span>
+        </li>
+        <li class="list-item">
+          <a href="/escaping-hedonism">Escaping Hedonism</a>
+          <span class="article-date">December 5, 2025</span>
+        </li>
+      </ul>
+    </section>
+    </div>
+  </div>
+
+  <div class="social-links">
+    <a href="https://x.com/kyle_corsola" target="_blank" class="twitter-bird-link">
+      <svg class="twitter-logo" viewBox="0 0 24 24" fill="#1DA1F2">
+        <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+      </svg>
+    </a>
+    <a href="https://huggingface.co/taproot26" target="_blank" class="hf-link">
+      <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" alt="Hugging Face" class="hf-logo">
+    </a>
+  </div>
+  
+  <script src="theme.js"></script>
+</body>
+</html>
+
+
