@@ -574,3 +574,58 @@ body.light-mode .sun-icon {
 .feedback-submit:hover {
   background-color: var(--control-bg-hover);
 }
+
+/* Whole post card is clickable, not just the title text */
+.list-item {
+  position: relative;
+}
+
+.list-item a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* Home button, fixed under the theme (moon) toggle */
+.home-link {
+  position: fixed;
+  top: calc(2rem + 45px + 0.75rem);
+  right: 2rem;
+  width: 45px;
+  height: 45px;
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  color: var(--text);
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.home-link:hover {
+  background: var(--control-bg-hover);
+  transform: scale(1.1);
+}
+
+.home-link svg {
+  width: 22px;
+  height: 22px;
+}
+
+@media (max-width: 768px) {
+  .home-link {
+    top: calc(1.25rem + 45px + 0.75rem);
+    right: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-link {
+    top: calc(1rem + 42px + 0.75rem);
+    right: 1rem;
+    width: 42px;
+    height: 42px;
+  }
+}
