@@ -1,0 +1,6 @@
+# Local-only documentation (session logs, ADRs, design specs) — never pushed.
+# The repo is public; these docs describe internal/admin mechanisms.
+docs/
+
+# OS noise
+.DS_Store
