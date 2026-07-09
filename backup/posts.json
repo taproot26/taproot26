@@ -1,9 +1,1 @@
-[
-    {
-        "slug": "e2e-test-post",
-        "title": "E2E Test Post",
-        "category": "technical",
-        "body": "First paragraph with <b>html</b> to escape.\n\nSecond paragraph.",
-        "created_at": "2026-07-09T09:10:00.41335+00:00"
-    }
-]
+[]
