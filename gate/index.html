@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>·</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="blog-post-container" style="max-width:420px;margin-top:20vh;">
+    <form id="gate-form" class="feedback-form">
+      <input type="password" id="gate-pass" class="feedback-input" placeholder="Password" autofocus required>
+      <button type="submit" class="feedback-submit">Enter</button>
+      <div id="gate-error" class="feedback-error" style="display:none;">Nope.</div>
+    </form>
+  </div>
+  <script>
+    var GATE_HASH = 'd7193ec2f221e36fea3663db6c72fbc1c650aa785795a6d76b9f5d167196ff54';
+    document.getElementById('gate-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var v = document.getElementById('gate-pass').value;
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)).then(function (buf) {
+        var hex = Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+        if (hex === GATE_HASH) {
+          sessionStorage.setItem('gateOk', '1');
+          location.href = '/write/';
+        } else {
+          document.getElementById('gate-error').style.display = 'block';
+        }
+      });
+    });
+  </script>
+  <script src="/theme.js"></script>
+</body>
+</html>

@@ -32,9 +32,9 @@
     if (!a) return;
     var href = a.getAttribute('href') || '';
     if (href.indexOf('http') === 0 || href.indexOf('mailto:') === 0) return;
-    // Internal post links look like "/slug" — a single path segment.
-    if (/^\/?[a-z0-9-]+\/?$/i.test(href)) {
-      var target = href.replace(/^\//, '').replace(/\/$/, '');
+    // Internal post links look like "/slug" (static) or "/p/slug" (dynamic).
+    if (/^\/?(p\/)?[a-z0-9-]+\/?$/i.test(href)) {
+      var target = href.replace(/^\//, '').replace(/^p\//, '').replace(/\/$/, '');
       track('post_click', { post_slug: target, from: slugFromPath() });
     }
   });
