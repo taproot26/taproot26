@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>日本語</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/japan/japan.css">
+</head>
+<body>
+  <div class="jp-wrap">
+    <div class="jp-head">
+      <div class="jp-title">
+        <span class="jp-jp">日本語</span>
+        <span class="jp-sub">nihongo</span>
+      </div>
+      <div class="jp-tabs">
+        <button class="jp-tab active" data-view="reference">Reference</button>
+        <button class="jp-tab" data-view="drills">Drills</button>
+        <button class="jp-tab" data-view="words">Word bank</button>
+      </div>
+    </div>
+
+    <!-- Reference -->
+    <div class="jp-view active" id="view-reference">
+      <div class="jp-toolbar">
+        <div class="jp-search">
+          <span class="jp-ico">⌕</span>
+          <input id="jpSearchInput" type="text" placeholder="Search rules, kana, meaning…" autocomplete="off">
+        </div>
+        <button class="jp-btn" id="jpAddBtn">+ Add rule 🔒</button>
+      </div>
+      <div class="jp-filters" id="jpFilters"></div>
+      <div class="jp-grid" id="jpGrid"></div>
+    </div>
+
+    <!-- Drills -->
+    <div class="jp-view" id="view-drills">
+      <div class="jp-drill"></div>
+    </div>
+
+    <!-- Word bank -->
+    <div class="jp-view" id="view-words">
+      <div class="jp-toolbar">
+        <div class="jp-search">
+          <span class="jp-ico">⌕</span>
+          <input id="jpWordSearch" type="text" placeholder="Search words, romaji, meaning…" autocomplete="off">
+        </div>
+      </div>
+      <div class="jp-filters" id="jpWordStatus"></div>
+      <div class="jp-filters" id="jpWordFilters"></div>
+      <div class="jp-wordcount" id="jpWordCount"></div>
+      <div class="jp-wordlist" id="jpWordList"></div>
+    </div>
+  </div>
+
+  <div class="jp-overlay" id="jpOverlay"></div>
+
+  <script src="/japan/japan-data.js"></script>
+  <script src="/japan/japan-words.js"></script>
+  <script src="/japan/japan.js"></script>
+  <script src="/theme.js"></script>
+</body>
+</html>
