@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Taproot the Game</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Alegreya+Sans:wght@400;500;700&display=swap">
+
+<style>
+  /* Layout: flat plum background. Landing = title + button left, character art right (fades into the bg). Creator = preview stage left, controls right. */
+  :root {
+    --bg: #150f24;
+    --panel: rgba(24, 18, 42, 0.88);
+    --fg: #f0e9dc;
+    --dim: #a89fb8;
+    --accent: #d4a94f;
+    --line: rgba(212, 169, 79, 0.26);
+    --accent-soft: rgba(212, 169, 79, 0.14);
+    --ink: #2a1f45;
+    --sky: #cdc6dc;
+    --display: 'Cinzel', Georgia, serif;
+    --body: 'Alegreya Sans', system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+  }
+  button { font-family: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .bg {
+    position: fixed; inset: 0; z-index: 0;
+    background: var(--sky) url("/game/bg.webp") 72% 50% / cover no-repeat;
+  }
+  .bg.dim { filter: brightness(0.35) blur(4px); }
+
+  .screen { position: relative; z-index: 1; min-height: 100%; }
+
+  /* Landing */
+  #landing { padding-block: 22px; box-sizing: border-box; }
+  .mark {
+    background: none; border: 0; padding: 0; color: #fff;
+    font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: 0.22em; text-transform: uppercase;
+    text-shadow: 0 1px 14px rgba(42, 31, 69, 0.65); transition: opacity 0.2s;
+  }
+  .mark:hover { opacity: 0.8; }
+  .btn {
+    font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase;
+    background: var(--accent); color: #17120a; border: 0; border-radius: 4px; padding: 14px 44px;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(212, 169, 79, 0.35); }
+  .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); padding: 10px 18px; font-size: 12px; }
+  .btn.ghost:hover { border-color: var(--accent); box-shadow: none; }
+
+  /* Creator */
+  .wrap { max-width: 940px; margin: 0 auto; padding-block: 28px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  .top h2 { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: 0.05em; margin: 0; }
+  .grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
+
+  .stage {
+    height: 330px; border-radius: 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 22px; box-sizing: border-box;
+    background: linear-gradient(#2a2148 0%, #5a4272 62%, #8a6a78 62.5%, #2e2538 62.6%, #1c1626 100%);
+  }
+  .stage .big { width: 190px; }
+  .caption { text-align: center; margin: 14px 0 0; font-family: var(--display); font-size: 17px; }
+  .caption small { display: block; font-family: var(--body); font-size: 13px; color: var(--dim); margin-top: 2px; }
+  .sizes { display: flex; align-items: flex-end; justify-content: center; gap: 22px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .sizes .s1 { width: 32px; } .sizes .s2 { width: 64px; }
+  .sizes span { display: block; text-align: center; font-size: 12px; color: var(--dim); margin-top: 4px; }
+  svg.sprite { width: 100%; display: block; }
+
+  .grp { margin-bottom: 20px; }
+  .grp > .lbl { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .name {
+    width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--fg); font-family: var(--display); font-size: 18px; padding: 10px 12px;
+  }
+  .opt { background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; font-size: 15px; transition: border-color 0.15s, background 0.15s; }
+  .opt:hover { border-color: var(--accent); }
+  .opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .classes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .cls { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 8px; }
+  .cls .mini { width: 40px; }
+  .sw { width: 32px; height: 32px; border-radius: 50%; background: var(--c); border: 2px solid rgba(255,255,255,0.15); padding: 0; }
+  .sw[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--bg); }
+  .actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+
+  @media (max-width: 780px) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .stage { height: 290px; }
+    .stage .big { width: 160px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg" id="bg" aria-hidden="true"></div>
+
+<main class="screen" id="landing">
+  <button class="mark" id="enter" type="button">Taproot the Game</button>
+</main>
+
+<main class="screen" id="creator" hidden>
+  <div class="wrap">
+    <div class="top">
+      <h2>Create Your Character</h2>
+      <button class="btn ghost" id="back" type="button">Back</button>
+    </div>
+    <div class="grid">
+      <section class="panel" aria-label="Preview">
+        <div class="stage"><div class="big" id="big"></div></div>
+        <p class="caption" id="caption"></p>
+        <div class="sizes">
+          <div><div class="s1" id="s1"></div><span>Small</span></div>
+          <div><div class="s2" id="s2"></div><span>Map size</span></div>
+        </div>
+      </section>
+      <section class="panel" aria-label="Customize">
+        <div class="grp"><label class="lbl" for="name">Name</label><input class="name" id="name" maxlength="16" value="Aldric" autocomplete="off"></div>
+        <div class="grp"><span class="lbl">Class</span><div class="classes" id="cls"></div></div>
+        <div class="grp"><span class="lbl">Skin</span><div class="row" id="skin"></div></div>
+        <div class="grp"><span class="lbl">Hair</span><div class="row" id="hs"></div></div>
+        <div class="grp"><span class="lbl">Hair color</span><div class="row" id="hc"></div></div>
+        <div class="actions"><button class="btn ghost" id="rand" type="button">Randomize</button></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+  const CLASSES = [['knight', 'Knight'], ['mage', 'Mage'], ['ranger', 'Ranger'], ['rogue', 'Rogue']];
+  const SKINS = ['#f1c9a5', '#e0a878', '#c68642', '#8d5524', '#5a3a22'];
+  const HAIRS = ['#2b1b12', '#6b3f1d', '#d9b25a', '#a63d2a', '#d8d4cc', '#3b4f8a'];
+  const STYLES = [['short', 'Short'], ['long', 'Long'], ['bald', 'Bald']];
+  const PAL = {
+    knight: { body: '#8f97a3', dark: '#5d6470', acc: '#a63d3d', pants: '#4a4f5a' },
+    mage:   { body: '#5b3f9a', dark: '#3d2a6b', acc: '#d4a94f', pants: '#3d2a6b' },
+    ranger: { body: '#4a7a3e', dark: '#33552b', acc: '#8b5e3c', pants: '#6b4a2e' },
+    rogue:  { body: '#3a3a46', dark: '#25252e', acc: '#8a8f99', pants: '#2b2b34' },
+  };
+
+  function sprite(o) {
+    const P = PAL[o.cls], skin = SKINS[o.skin], hair = HAIRS[o.hc];
+    let s = '';
+    const r = (x, y, w, h, c) => { s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}"/>`; };
+    s += '<ellipse cx="8" cy="23.2" rx="5.5" ry="0.8" fill="#000" opacity=".35"/>';
+
+    if (o.cls === 'mage')   { r(14, 7, 1, 16, '#6b4a2e'); r(13, 4, 3, 3, '#6ac4ff'); r(14, 3, 1, 1, '#bfe9ff'); }
+    if (o.cls === 'ranger') { r(14, 8, 1, 13, '#8b5e3c'); r(13, 8, 1, 1, '#8b5e3c'); r(13, 20, 1, 1, '#8b5e3c'); }
+    if (o.cls === 'knight') { r(14, 9, 1, 8, '#d8dde6'); r(13, 16, 3, 1, '#d4a94f'); r(14, 17, 1, 2, '#6b4a2e'); }
+    if (o.cls === 'rogue')  { r(14, 14, 1, 3, '#cfd4dc'); r(13, 17, 3, 1, '#6b4a2e'); }
+
+    r(5, 17, 3, 5, P.pants); r(8, 17, 3, 5, P.pants);
+    r(5, 21, 3, 2, P.dark); r(8, 21, 3, 2, P.dark);
+    if (o.cls === 'mage') { r(4, 16, 8, 6, P.body); r(4, 21, 8, 1, P.dark); }
+
+    r(4, 10, 8, 7, P.body); r(2, 10, 2, 6, P.body); r(12, 10, 2, 6, P.body);
+    r(2, 16, 2, 1, skin); r(12, 16, 2, 1, skin);
+    r(4, 15, 8, 1, o.cls === 'mage' ? P.acc : P.dark);
+    if (o.cls === 'knight') { r(7, 10, 2, 5, P.acc); r(2, 10, 2, 2, P.dark); r(12, 10, 2, 2, P.dark); }
+    if (o.cls === 'ranger') r(7, 10, 2, 2, P.acc);
+    if (o.cls === 'rogue')  r(4, 10, 8, 1, P.dark);
+
+    r(7, 9, 2, 1, skin); r(5, 3, 6, 6, skin);
+    r(6, 6, 1, 1, '#1d1a1a'); r(9, 6, 1, 1, '#1d1a1a'); r(7, 8, 2, 1, '#a5614a');
+
+    if (o.hs !== 'bald') {
+      r(5, 2, 6, 2, hair); r(4, 3, 1, 3, hair); r(11, 3, 1, 3, hair);
+      if (o.hs === 'long') { r(4, 3, 1, 9, hair); r(11, 3, 1, 9, hair); }
+    }
+
+    if (o.cls === 'knight') { r(4, 2, 8, 3, P.body); r(4, 5, 1, 3, P.body); r(11, 5, 1, 3, P.body); r(7, 4, 2, 3, P.dark); r(7, 0, 2, 2, P.acc); }
+    if (o.cls === 'mage')   { r(7, 0, 2, 1, P.body); r(6, 1, 4, 1, P.body); r(5, 2, 6, 1, P.body); r(3, 3, 10, 1, P.dark); }
+    if (o.cls === 'ranger' || o.cls === 'rogue') {
+      r(5, 1, 6, 1, P.body); r(4, 2, 8, 2, P.body); r(4, 4, 1, 5, P.body); r(11, 4, 1, 5, P.body);
+      if (o.cls === 'rogue') r(5, 7, 6, 2, P.dark);
+    }
+    return `<svg class="sprite" viewBox="0 0 16 24" shape-rendering="crispEdges" role="img" aria-label="${o.cls}">${s}</svg>`;
+  }
+
+  const S = { name: 'Aldric', cls: 'knight', skin: 1, hs: 'short', hc: 1 };
+  const $ = (id) => document.getElementById(id);
+
+  $('cls').innerHTML = CLASSES.map(([k, n]) => `<button type="button" class="opt cls" data-k="cls" data-v="${k}"><span class="mini" data-mini="${k}"></span><span>${n}</span></button>`).join('');
+  $('skin').innerHTML = SKINS.map((c, i) => `<button type="button" class="sw" data-k="skin" data-v="${i}" style="--c:${c}" aria-label="Skin tone ${i + 1}"></button>`).join('');
+  $('hs').innerHTML = STYLES.map(([k, n]) => `<button type="button" class="opt" data-k="hs" data-v="${k}">${n}</button>`).join('');
+  $('hc').innerHTML = HAIRS.map((c, i) => `<button type="button" class="sw" data-k="hc" data-v="${i}" style="--c:${c}" aria-label="Hair color ${i + 1}"></button>`).join('');
+
+  function update() {
+    $('big').innerHTML = sprite(S);
+    $('s1').innerHTML = sprite(S);
+    $('s2').innerHTML = sprite(S);
+    document.querySelectorAll('[data-mini]').forEach((el) => { el.innerHTML = sprite({ ...S, cls: el.dataset.mini }); });
+    document.querySelectorAll('[data-k]').forEach((b) => b.setAttribute('aria-pressed', String(String(S[b.dataset.k]) === b.dataset.v)));
+    const label = CLASSES.find(([k]) => k === S.cls)[1];
+    $('caption').innerHTML = `${S.name.trim() || 'Unnamed'}<small>${label}</small>`;
+  }
+
+  $('creator').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-k]');
+    if (!b) return;
+    const k = b.dataset.k;
+    S[k] = (k === 'skin' || k === 'hc') ? Number(b.dataset.v) : b.dataset.v;
+    update();
+  });
+  $('name').addEventListener('input', (e) => { S.name = e.target.value; update(); });
+  $('rand').addEventListener('click', () => {
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    S.cls = pick(CLASSES)[0]; S.skin = Math.floor(Math.random() * SKINS.length);
+    S.hs = pick(STYLES)[0]; S.hc = Math.floor(Math.random() * HAIRS.length);
+    update();
+  });
+
+  function show(creator) {
+    $('landing').hidden = creator;
+    $('creator').hidden = !creator;
+    $('bg').classList.toggle('dim', creator);
+    window.scrollTo(0, 0);
+  }
+  $('enter').addEventListener('click', () => show(true));
+  $('back').addEventListener('click', () => show(false));
+
+  update();
+</script>
+</body>
+</html>
