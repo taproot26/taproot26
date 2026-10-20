@@ -188,6 +188,7 @@ window.JAPAN_DATA = {
       { jp: 'しなくてもいい', romaji: 'shinakute mo ii', en: "don't have to do it" },
       { jp: '急がなくていい', romaji: 'isoganakute ii', en: 'no need to hurry (casual, drops も)' },
       { jp: '払わなくてもいい', romaji: 'harawanakute mo ii', en: "don't have to pay" },
+      { jp: 'しなくてもよかった', romaji: 'shinakute mo yokatta', en: "didn't have to do it (past → よかった)" },
     ] },
     { id: 'nakya', section: 'permission', pattern: 'なきゃいけない', gloss: 'have to / must', example: '行かなきゃいけない', romaji: 'ikanakya ikenai', translation: 'have to go', examples: [
       { jp: '食べなきゃいけない', romaji: 'tabenakya ikenai', en: 'have to eat' },

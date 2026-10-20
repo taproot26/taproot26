@@ -181,6 +181,18 @@ body.jp-editing .jp-card .jp-edit { display: inline; }
 }
 .jp-drill-progress { font-size: 0.78rem; color: var(--date); margin-top: 24px; }
 
+/* Drill history */
+.jp-log-err { color: #D85A30; font-size: 0.8rem; margin-bottom: 6px; }
+.jp-log { max-width: 460px; margin: 36px auto 0; }
+.jp-log-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--date); margin-bottom: 8px; }
+.jp-log-clear { background: none; border: none; color: var(--date); font-family: inherit; font-size: 0.78rem; cursor: pointer; }
+.jp-log-clear:hover { color: var(--text); }
+.jp-log-row { display: flex; gap: 10px; align-items: baseline; font-size: 0.85rem; padding: 7px 0; border-top: 1px solid var(--card-border); }
+.jp-log-row.ok .jp-log-mark { color: #1D9E75; }
+.jp-log-row.no .jp-log-mark { color: #D85A30; }
+.jp-log-q { flex: none; }
+.jp-log-a { color: var(--date); min-width: 0; overflow-wrap: anywhere; }
+
 /* Add/edit overlay */
 .jp-overlay {
   display: none; position: fixed; inset: 0; z-index: 100;

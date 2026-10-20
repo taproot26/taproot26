@@ -147,7 +147,7 @@
     if (isUnlocked()) openRuleModal(null); else openUnlockModal();
   });
 
-  function openUnlockModal() {
+  function openUnlockModal(after) {
     overlay.innerHTML =
       '<div class="jp-modal"><h3>Unlock editing</h3>' +
       '<div class="jp-field"><label>Password</label><input type="password" id="jpPass" autofocus></div>' +
@@ -162,7 +162,12 @@
       var v = $('jpPass').value;
       crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)).then(function (buf) {
         var hex = Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
-        if (hex === GATE_HASH) { sessionStorage.setItem('jp_edit', '1'); applyEditState(); closeOverlay(); openRuleModal(null); }
+        if (hex === GATE_HASH) {
+          sessionStorage.setItem('jp_edit', '1');
+          sessionStorage.setItem('jp_pw', v);
+          applyEditState(); closeOverlay();
+          if (after) after(); else openRuleModal(null);
+        }
         else { $('jpModalErr').style.display = 'block'; }
       });
     };
@@ -250,7 +255,83 @@
     input.focus();
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); handleAction(); } });
     $('jpAction').addEventListener('click', handleAction);
+    renderDrillLog();
   }
+  // Drill history. Unlocked with your password -> saves to the database through
+  // /api/japan. Otherwise (or if the API is unreachable) it stays in this browser.
+  var logError = '';
+  var fromDb = false;
+
+  function syncing() { return isUnlocked() && !!sessionStorage.getItem('jp_pw'); }
+
+  function api(action, extra) {
+    return fetch('/api/japan/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ password: sessionStorage.getItem('jp_pw') }, extra || {})),
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, status: r.status, data: data }; });
+    });
+  }
+
+  function localPush(entry) {
+    var log = load('jp_drill_log', []);
+    log.push(Object.assign({ t: Date.now() }, entry));
+    save('jp_drill_log', log.slice(-500));
+  }
+
+  function logAttempt(entry) {
+    if (!syncing()) { localPush(entry); renderDrillLog(); return; }
+    api('log', { entry: entry }).then(function (r) {
+      if (r.ok) { logError = ''; } else {
+        localPush(entry);
+        logError = r.status === 401 ? 'Wrong password, so that attempt stayed on this browser. Unlock again.' : 'Couldn\'t reach the database, so that attempt stayed on this browser.';
+        if (r.status === 401) sessionStorage.removeItem('jp_pw');
+      }
+      renderDrillLog();
+    }).catch(function () {
+      localPush(entry);
+      logError = 'Couldn\'t reach the database, so that attempt stayed on this browser.';
+      renderDrillLog();
+    });
+  }
+
+  function fetchLog() {
+    var local = function () { fromDb = false; return load('jp_drill_log', []).slice().reverse().slice(0, 200); };
+    if (!syncing()) return Promise.resolve(local());
+    return api('list').then(function (r) {
+      if (r.ok) { fromDb = true; return r.data.rows; }
+      logError = 'Couldn\'t load the database log.';
+      return local();
+    }).catch(function () { logError = 'Couldn\'t load the database log.'; return local(); });
+  }
+
+  function renderDrillLog() {
+    var el = $('jpDrillLog');
+    fetchLog().then(function (log) {
+      var right = log.filter(function (e) { return e.ok; }).length;
+      var rows = log.slice(0, 20).map(function (e) {
+        return '<div class="jp-log-row ' + (e.ok ? 'ok' : 'no') + '">' +
+          '<span class="jp-log-mark">' + (e.ok ? '✓' : '✕') + '</span>' +
+          '<span class="jp-log-q">' + esc(e.verb) + ' → ' + esc(e.target) + '</span>' +
+          '<span class="jp-log-a">' + (e.ok ? esc(e.typed) : esc(e.typed) + ' (answer: ' + esc(e.answer) + ')') + '</span>' +
+        '</div>';
+      }).join('');
+      var summary = log.length ? right + ' / ' + log.length + ' correct (' + Math.round(100 * right / log.length) + '%)' : 'no attempts yet';
+      el.innerHTML =
+        (logError ? '<div class="jp-log-err">' + esc(logError) + '</div>' : '') +
+        '<div class="jp-log-head"><span>History · ' + summary + (fromDb ? ' · saved to database' : ' · this browser only') + '</span>' +
+        '<span>' + (syncing() ? '' : '<button class="jp-log-clear" id="jpLogUnlock">Unlock to save</button> ') +
+        (log.length ? '<button class="jp-log-clear" id="jpLogClear">Clear</button>' : '') + '</span></div>' + rows;
+      if (!syncing()) $('jpLogUnlock').addEventListener('click', function () { openUnlockModal(function () { renderDrillLog(); }); });
+      if (log.length) $('jpLogClear').addEventListener('click', function () {
+        if (!confirm('Clear your drill history?')) return;
+        if (!syncing()) { save('jp_drill_log', []); renderDrillLog(); return; }
+        api('clear').then(function (r) { logError = r.ok ? '' : 'Couldn\'t clear the database log.'; renderDrillLog(); });
+      });
+    });
+  }
+
   // One handler, state-driven: first call checks, second goes to the next drill.
   function handleAction() {
     if (answered) { nextDrill(); return; }
@@ -261,6 +342,7 @@
     done++;
     var ok = checkAnswer(input.value, current.answers);
     if (ok) correct++;
+    logAttempt({ verb: current.verb, target: current.target, section: current.section, typed: input.value.trim(), answer: current.answers[0], ok: ok });
     input.setAttribute('readonly', 'readonly');
     var ans = current.answers[0], romaji = current.answers[current.answers.length - 1];
     fb.innerHTML =
