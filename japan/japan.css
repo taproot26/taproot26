@@ -182,7 +182,7 @@ body.jp-editing .jp-card .jp-edit { display: inline; }
 .jp-drill-progress { font-size: 0.78rem; color: var(--date); margin-top: 24px; }
 
 /* Drill history */
-.jp-log-err { color: #D85A30; font-size: 0.8rem; margin-bottom: 6px; }
+.jp-log-msg { color: var(--date); font-size: 0.8rem; margin-bottom: 6px; }
 .jp-log { max-width: 460px; margin: 36px auto 0; }
 .jp-log-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--date); margin-bottom: 8px; }
 .jp-log-clear { background: none; border: none; color: var(--date); font-family: inherit; font-size: 0.78rem; cursor: pointer; }

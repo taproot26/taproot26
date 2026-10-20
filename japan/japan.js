@@ -257,78 +257,74 @@
     $('jpAction').addEventListener('click', handleAction);
     renderDrillLog();
   }
-  // Drill history. Unlocked with your password -> saves to the database through
-  // /api/japan. Otherwise (or if the API is unreachable) it stays in this browser.
-  var logError = '';
-  var fromDb = false;
+  // Drill history. Always saved in this browser first. "Sync" uploads whatever
+  // hasn't been uploaded yet to the database (needs your password), in one batch.
+  var logMsg = '';
+  // A local copy has no API of its own, so it syncs up to the live site.
+  var API = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? 'https://taproot.love' : '';
 
-  function syncing() { return isUnlocked() && !!sessionStorage.getItem('jp_pw'); }
-
-  function api(action, extra) {
-    return fetch('/api/japan/' + action, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ password: sessionStorage.getItem('jp_pw') }, extra || {})),
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, status: r.status, data: data }; });
-    });
-  }
-
-  function localPush(entry) {
-    var log = load('jp_drill_log', []);
-    log.push(Object.assign({ t: Date.now() }, entry));
-    save('jp_drill_log', log.slice(-500));
-  }
+  function getLog() { return load('jp_drill_log', []); }
 
   function logAttempt(entry) {
-    if (!syncing()) { localPush(entry); renderDrillLog(); return; }
-    api('log', { entry: entry }).then(function (r) {
-      if (r.ok) { logError = ''; } else {
-        localPush(entry);
-        logError = r.status === 401 ? 'Wrong password, so that attempt stayed on this browser. Unlock again.' : 'Couldn\'t reach the database, so that attempt stayed on this browser.';
-        if (r.status === 401) sessionStorage.removeItem('jp_pw');
-      }
-      renderDrillLog();
-    }).catch(function () {
-      localPush(entry);
-      logError = 'Couldn\'t reach the database, so that attempt stayed on this browser.';
-      renderDrillLog();
-    });
+    var log = getLog();
+    log.push(Object.assign({ t: Date.now(), synced: false }, entry));
+    save('jp_drill_log', log.slice(-500));
+    renderDrillLog();
   }
 
-  function fetchLog() {
-    var local = function () { fromDb = false; return load('jp_drill_log', []).slice().reverse().slice(0, 200); };
-    if (!syncing()) return Promise.resolve(local());
-    return api('list').then(function (r) {
-      if (r.ok) { fromDb = true; return r.data.rows; }
-      logError = 'Couldn\'t load the database log.';
-      return local();
-    }).catch(function () { logError = 'Couldn\'t load the database log.'; return local(); });
+  function syncLog() {
+    if (!sessionStorage.getItem('jp_pw')) { openUnlockModal(syncLog); return; }
+    var log = getLog();
+    var pending = log.filter(function (e) { return !e.synced; });
+    if (!pending.length) return;
+    var batch = pending.slice(0, 200);
+    logMsg = 'Syncing…'; renderDrillLog();
+    fetch(API + '/api/japan/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: sessionStorage.getItem('jp_pw'), entries: batch }),
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status }; });
+    }).then(function (r) {
+      if (!r.ok) {
+        if (r.status === 401) sessionStorage.removeItem('jp_pw');
+        logMsg = r.status === 401 ? 'Wrong password. Try Sync again.' : 'Couldn\'t sync. Your attempts are still saved here.';
+        renderDrillLog(); return;
+      }
+      var sent = {};
+      batch.forEach(function (e) { sent[e.t] = true; });
+      save('jp_drill_log', getLog().map(function (e) { return sent[e.t] ? Object.assign(e, { synced: true }) : e; }));
+      logMsg = 'Synced ' + batch.length + '.';
+      renderDrillLog();
+      if (pending.length > batch.length) syncLog();
+    }).catch(function () {
+      logMsg = 'Couldn\'t sync (offline?). Your attempts are still saved here.';
+      renderDrillLog();
+    });
   }
 
   function renderDrillLog() {
     var el = $('jpDrillLog');
-    fetchLog().then(function (log) {
-      var right = log.filter(function (e) { return e.ok; }).length;
-      var rows = log.slice(0, 20).map(function (e) {
-        return '<div class="jp-log-row ' + (e.ok ? 'ok' : 'no') + '">' +
-          '<span class="jp-log-mark">' + (e.ok ? '✓' : '✕') + '</span>' +
-          '<span class="jp-log-q">' + esc(e.verb) + ' → ' + esc(e.target) + '</span>' +
-          '<span class="jp-log-a">' + (e.ok ? esc(e.typed) : esc(e.typed) + ' (answer: ' + esc(e.answer) + ')') + '</span>' +
-        '</div>';
-      }).join('');
-      var summary = log.length ? right + ' / ' + log.length + ' correct (' + Math.round(100 * right / log.length) + '%)' : 'no attempts yet';
-      el.innerHTML =
-        (logError ? '<div class="jp-log-err">' + esc(logError) + '</div>' : '') +
-        '<div class="jp-log-head"><span>History · ' + summary + (fromDb ? ' · saved to database' : ' · this browser only') + '</span>' +
-        '<span>' + (syncing() ? '' : '<button class="jp-log-clear" id="jpLogUnlock">Unlock to save</button> ') +
-        (log.length ? '<button class="jp-log-clear" id="jpLogClear">Clear</button>' : '') + '</span></div>' + rows;
-      if (!syncing()) $('jpLogUnlock').addEventListener('click', function () { openUnlockModal(function () { renderDrillLog(); }); });
-      if (log.length) $('jpLogClear').addEventListener('click', function () {
-        if (!confirm('Clear your drill history?')) return;
-        if (!syncing()) { save('jp_drill_log', []); renderDrillLog(); return; }
-        api('clear').then(function (r) { logError = r.ok ? '' : 'Couldn\'t clear the database log.'; renderDrillLog(); });
-      });
+    var log = getLog().slice().reverse();
+    var right = log.filter(function (e) { return e.ok; }).length;
+    var pending = log.filter(function (e) { return !e.synced; }).length;
+    var rows = log.slice(0, 20).map(function (e) {
+      return '<div class="jp-log-row ' + (e.ok ? 'ok' : 'no') + '">' +
+        '<span class="jp-log-mark">' + (e.ok ? '✓' : '✕') + '</span>' +
+        '<span class="jp-log-q">' + esc(e.verb) + ' → ' + esc(e.target) + '</span>' +
+        '<span class="jp-log-a">' + (e.ok ? esc(e.typed) : esc(e.typed) + ' (answer: ' + esc(e.answer) + ')') + '</span>' +
+      '</div>';
+    }).join('');
+    var summary = log.length ? right + ' / ' + log.length + ' correct (' + Math.round(100 * right / log.length) + '%)' : 'no attempts yet';
+    el.innerHTML =
+      (logMsg ? '<div class="jp-log-msg">' + esc(logMsg) + '</div>' : '') +
+      '<div class="jp-log-head"><span>History · ' + summary + (log.length ? ' · ' + pending + ' not synced' : '') + '</span>' +
+      '<span>' + (pending ? '<button class="jp-log-clear" id="jpLogSync">Sync ' + pending + '</button> ' : '') +
+      (log.length ? '<button class="jp-log-clear" id="jpLogClear">Clear</button>' : '') + '</span></div>' + rows;
+    if (pending) $('jpLogSync').addEventListener('click', syncLog);
+    if (log.length) $('jpLogClear').addEventListener('click', function () {
+      if (!confirm('Clear your drill history on this browser? Anything already synced stays in the database.')) return;
+      save('jp_drill_log', []); logMsg = ''; renderDrillLog();
     });
   }
 
