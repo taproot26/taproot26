@@ -109,8 +109,32 @@
   .linkbtn { background: none; border: 0; color: var(--dim); text-decoration: underline; padding: 4px; font-size: 14px; }
   .linkbtn:hover { color: var(--fg); }
 
+  .home-grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .side, .main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .card { text-align: center; }
+  .portrait {
+    height: 200px; border-radius: 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 14px; box-sizing: border-box;
+    background: linear-gradient(#2a2148 0%, #5a4272 62%, #8a6a78 62.5%, #2e2538 62.6%, #1c1626 100%);
+  }
+  .portrait > div { width: 100px; }
+  .card h3 { font-family: var(--display); font-size: 20px; margin: 14px 0 0; }
+  .sub { color: var(--dim); font-size: 14px; margin: 2px 0 0; }
+  .lvl { display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); margin-top: 14px; font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); margin-top: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .h { font-family: var(--display); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+  .maphead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .maphead .h { margin: 0; }
+  .map { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); aspect-ratio: 2 / 1; max-width: 100%; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+  .map i { display: block; position: relative; }
+  .map .you { position: absolute; inset: 28%; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.07); font-size: 15px; }
+  .list li:last-child { border-bottom: 0; }
+  .list .meta { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
+
   @media (max-width: 780px) {
-    .grid { grid-template-columns: minmax(0, 1fr); }
+    .grid, .home-grid { grid-template-columns: minmax(0, 1fr); }
     .stage { height: 290px; }
     .stage .big { width: 160px; }
   }
@@ -169,6 +193,44 @@
           <button class="btn" id="save" type="button">Save</button>
         </div>
       </section>
+    </div>
+  </div>
+</main>
+
+<main class="screen" id="home" hidden>
+  <div class="wrap">
+    <div class="top">
+      <h2>Taproot</h2>
+      <div class="who">
+        <span id="homeWho"></span>
+        <button class="btn ghost" id="edit" type="button">Edit character</button>
+        <button class="btn ghost" id="logout2" type="button">Log out</button>
+      </div>
+    </div>
+    <div class="home-grid">
+      <div class="side">
+        <section class="panel card" aria-label="Character">
+          <div class="portrait"><div id="hSprite"></div></div>
+          <h3 id="hName"></h3>
+          <p class="sub" id="hClass"></p>
+          <div class="lvl"><span>Level 1</span><span>0 / 100 XP</span></div>
+          <div class="bar"><i style="width: 0%"></i></div>
+        </section>
+        <section class="panel" aria-label="Bag">
+          <h3 class="h">Bag</h3>
+          <ul class="list" id="bag"></ul>
+        </section>
+      </div>
+      <div class="main">
+        <section class="panel" aria-label="Map">
+          <div class="maphead"><h3 class="h">The City</h3><span class="sub">Map coming soon</span></div>
+          <div class="map" id="map"></div>
+        </section>
+        <section class="panel" aria-label="Quests">
+          <h3 class="h">Quests</h3>
+          <ul class="list" id="quests"></ul>
+        </section>
+      </div>
     </div>
   </div>
 </main>
@@ -258,11 +320,38 @@
     update();
   });
 
-  function show(creator) {
-    $('landing').hidden = creator;
-    $('creator').hidden = !creator;
-    $('bg').classList.toggle('dim', creator);
+  function show(name) {
+    ['landing', 'creator', 'home'].forEach((n) => { $(n).hidden = n !== name; });
+    $('bg').classList.toggle('dim', name !== 'landing');
     window.scrollTo(0, 0);
+  }
+
+  const player = { username: '', hasChar: false };
+  const BAG = [['Wood', 12], ['Iron Ore', 4], ['Berries', 7], ['Herbs', 3]];
+  const QUESTS = [['Speak to the Gatekeeper', '+20 XP'], ['Gather 10 Wood', '+30 XP'], ['Claim your first plot', '+50 XP']];
+
+  function buildHome() {
+    $('bag').innerHTML = BAG.map(([n, q]) => `<li><span>${n}</span><span class="meta">x${q}</span></li>`).join('');
+    $('quests').innerHTML = QUESTS.map(([n, r]) => `<li><span>${n}</span><span class="meta">${r}</span></li>`).join('');
+    let tiles = '';
+    for (let r = 0; r < 7; r++) {
+      for (let c = 0; c < 14; c++) {
+        const city = c >= 4 && c <= 9 && r >= 1 && r <= 5;
+        const keep = c >= 6 && c <= 7 && r >= 2 && r <= 3;
+        const plot = city && !keep && (c + r) % 2 === 0;
+        const bg = keep ? '#8a8fa0' : plot ? '#5a4f68' : city ? '#4b4358' : (c * 7 + r * 3) % 5 === 0 ? '#2a4233' : '#2f4a3a';
+        const edge = plot ? 'box-shadow: inset 0 0 0 1px rgba(212, 169, 79, 0.35);' : '';
+        tiles += `<i style="background:${bg};${edge}">${c === 7 && r === 4 ? '<b class="you"></b>' : ''}</i>`;
+      }
+    }
+    $('map').innerHTML = tiles;
+  }
+
+  function renderHome() {
+    $('hSprite').innerHTML = sprite(S);
+    $('hName').textContent = S.name.trim() || player.username;
+    $('hClass').textContent = CLASSES.find(([k]) => k === S.cls)[1];
+    $('homeWho').textContent = player.username;
   }
   const SESSION = 'taproot_session';
   const getKey = () => { try { return localStorage.getItem(SESSION); } catch (e) { return null; } };
@@ -282,10 +371,19 @@
   }
 
   function enterGame(user) {
-    if (user.character) { Object.assign(S, user.character); $('name').value = S.name; }
+    player.username = user.username;
+    player.hasChar = !!user.character;
     $('who').textContent = user.username;
-    update();
-    show(true);
+    if (user.character) {
+      Object.assign(S, user.character);
+      $('name').value = S.name;
+      update();
+      renderHome();
+      show('home');
+    } else {
+      update();
+      show('creator');
+    }
   }
 
   let mode = 'login';
@@ -326,16 +424,22 @@
   });
   $('save').addEventListener('click', async () => {
     $('saveMsg').textContent = 'Saving...';
-    try { await api('save', { character: S }); $('saveMsg').textContent = 'Saved'; }
-    catch (err) { $('saveMsg').textContent = err.status === 401 ? 'Session expired, sign in again' : err.message; }
+    try {
+      await api('save', { character: S });
+      player.hasChar = true;
+      renderHome();
+      show('home');
+    } catch (err) { $('saveMsg').textContent = err.status === 401 ? 'Session expired, sign in again' : err.message; }
   });
-  $('logout').addEventListener('click', async () => {
+  ['logout', 'logout2'].forEach((id) => $(id).addEventListener('click', async () => {
     await api('logout').catch(() => {});
     setKey(null);
-    show(false);
-  });
-  $('back').addEventListener('click', () => show(false));
+    show('landing');
+  }));
+  $('edit').addEventListener('click', () => show('creator'));
+  $('back').addEventListener('click', () => show(player.hasChar ? 'home' : 'landing'));
 
+  buildHome();
   update();
 </script>
 </body>
