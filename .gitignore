@@ -6,3 +6,9 @@ docs/
 .DS_Store
 .vercel
 .env*
+
+# Local drill history database (personal data)
+japan/local/
+
+# Local game mock DB (test accounts, created by game-dev-server.js)
+game-local-db.json
