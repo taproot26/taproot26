@@ -7,8 +7,11 @@ create table if not exists public.game_players (
   failed_attempts int not null default 0,
   locked_until timestamptz,
   character jsonb,
+  inventory jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
+
+alter table public.game_players add column if not exists inventory jsonb not null default '[]'::jsonb;
 
 -- No policies on purpose: the browser's anon key can't touch this table.
 -- Only the server functions, using the service-role key, can read or write it.

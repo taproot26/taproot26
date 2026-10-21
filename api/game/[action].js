@@ -1,10 +1,11 @@
 const crypto = require('crypto');
+const G = require('../../game/items.js');
 
 const TABLE = (process.env.SUPABASE_URL || 'https://azvdqigaqwbeakjieaps.supabase.co') + '/rest/v1/game_players';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-const CLASSES = ['knight', 'mage', 'ranger', 'rogue'];
 const STYLES = ['short', 'long', 'bald'];
+const ALL_ITEMS = Object.keys(G.ITEMS);
 const MAX_ATTEMPTS = 5;
 const LOCK_MS = 5 * 60 * 1000;
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -12,6 +13,7 @@ const DUMMY_HASH = '00'.repeat(16) + ':' + '00'.repeat(64);
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 64, (e, k) => (e ? no(e) : ok(k))));
+const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
 async function hashPassword(pw) {
   const salt = crypto.randomBytes(16);
@@ -48,18 +50,35 @@ async function sessionUser(req) {
   const m = /^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization || '');
   if (!m) return null;
   const now = encodeURIComponent(new Date().toISOString());
-  const { data } = await db(`?session_hash=eq.${sha256(m[1])}&session_expires=gt.${now}&select=id,username,character`);
+  const { data } = await db(`?session_hash=eq.${sha256(m[1])}&session_expires=gt.${now}&select=id,username,character,inventory`);
   return (data && data[0]) || null;
 }
 
-function cleanCharacter(c) {
+// Until items can be earned, every player owns every item.
+const ownedItems = (user) => (Array.isArray(user.inventory) && user.inventory.length ? user.inventory : ALL_ITEMS);
+
+function cleanCharacter(c, owned) {
   if (!c || typeof c !== 'object') return null;
   const skin = Number(c.skin);
   const hc = Number(c.hc);
-  if (!CLASSES.includes(c.cls) || !STYLES.includes(c.hs)) return null;
+  if (!has(G.BASE, c.cls) || !STYLES.includes(c.hs)) return null;
   if (!Number.isInteger(skin) || skin < 0 || skin > 4) return null;
   if (!Number.isInteger(hc) || hc < 0 || hc > 5) return null;
-  return { name: String(c.name ?? '').trim().slice(0, 16), cls: c.cls, skin, hs: c.hs, hc };
+
+  const wanted = c.equipment && typeof c.equipment === 'object' ? c.equipment : G.defaultEquipment(c.cls);
+  const equipment = {};
+  for (const slot of G.SLOTS) {
+    const id = wanted[slot] ?? null;
+    if (id !== null) {
+      if (typeof id !== 'string' || !has(G.ITEMS, id) || G.ITEMS[id].slot !== slot || !owned.includes(id)) return null;
+    }
+    equipment[slot] = id;
+  }
+  return {
+    name: String(c.name ?? '').trim().slice(0, 16),
+    cls: c.cls, skin, hs: c.hs, hc, equipment,
+    stats: G.computeStats(c.cls, equipment),
+  };
 }
 
 const patch = (id, fields) => db(`?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(fields) });
@@ -81,15 +100,20 @@ module.exports = async (req, res) => {
       if (!/^[a-z0-9_]{3,20}$/.test(username)) return send(400, { error: 'Username must be 3-20 letters, numbers or underscores' });
       if (password.length < 8 || password.length > 128) return send(400, { error: 'Password must be 8-128 characters' });
       const s = newSession();
-      const r = await db('', { method: 'POST', body: JSON.stringify({ username, password_hash: await hashPassword(password), ...s.fields }) });
+      const r = await db('', {
+        method: 'POST',
+        body: JSON.stringify({ username, password_hash: await hashPassword(password), inventory: ALL_ITEMS, ...s.fields }),
+      });
       if (r.status === 409) return send(409, { error: 'That username is taken' });
       if (r.status >= 300) throw new Error('insert failed: ' + r.status);
-      return send(200, { key: s.key, username, character: null });
+      return send(200, { key: s.key, username, character: null, inventory: ALL_ITEMS });
     }
 
     if (action === 'login') {
       const valid = /^[a-z0-9_]{3,20}$/.test(username) && password.length <= 128;
-      const r = valid ? await db(`?username=eq.${username}&select=id,username,password_hash,failed_attempts,locked_until,character`) : { data: null };
+      const r = valid
+        ? await db(`?username=eq.${username}&select=id,username,password_hash,failed_attempts,locked_until,character,inventory`)
+        : { data: null };
       const user = r.data && r.data[0];
       if (user && user.locked_until && new Date(user.locked_until) > new Date()) {
         return send(429, { error: 'Too many attempts. Try again in a few minutes' });
@@ -105,17 +129,22 @@ module.exports = async (req, res) => {
         return send(401, { error: 'Wrong username or password' });
       }
       const s = newSession();
-      await patch(user.id, { ...s.fields, failed_attempts: 0, locked_until: null });
-      return send(200, { key: s.key, username: user.username, character: user.character });
+      const inventory = ownedItems(user);
+      await patch(user.id, { ...s.fields, failed_attempts: 0, locked_until: null, inventory });
+      return send(200, { key: s.key, username: user.username, character: user.character, inventory });
     }
 
     const user = await sessionUser(req);
     if (!user) return send(401, { error: 'Please sign in again' });
+    const inventory = ownedItems(user);
 
-    if (action === 'me') return send(200, { username: user.username, character: user.character });
+    if (action === 'me') {
+      if (!user.inventory || !user.inventory.length) await patch(user.id, { inventory });
+      return send(200, { username: user.username, character: user.character, inventory });
+    }
 
     if (action === 'save') {
-      const character = cleanCharacter(body.character);
+      const character = cleanCharacter(body.character, inventory);
       if (!character) return send(400, { error: 'Invalid character' });
       await patch(user.id, { character });
       return send(200, { ok: true, character });

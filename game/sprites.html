@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite Gallery</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+  /* Dev page: every character combo the renderer can make, next to the map's reference sprite. */
+  :root { --bg: #150f24; --panel: rgba(24, 18, 42, 0.88); --fg: #f0e9dc; --dim: #a89fb8; --accent: #d4a94f; --line: rgba(212, 169, 79, 0.26); }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: 'Alegreya Sans', system-ui, sans-serif; padding: 24px 16px 48px; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  h1 { font-family: 'Cinzel', serif; font-size: 22px; letter-spacing: 0.06em; margin: 0; }
+  h2 { font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  figcaption { font-size: 12px; color: var(--dim); text-align: center; }
+  .stage { display: flex; align-items: flex-end; justify-content: center; padding: 14px 18px 10px; border-radius: 6px;
+    background: linear-gradient(#2a2148 0%, #5a4272 62%, #8a6a78 62.5%, #2e2538 62.6%, #1c1626 100%); }
+  .sprite, canvas { display: block; image-rendering: pixelated; height: auto; }
+  .x1 .sprite { width: 40px; } .x2 .sprite { width: 80px; } .x3 .sprite { width: 120px; } .x4 .sprite { width: 160px; }
+  .grid { display: grid; grid-template-columns: auto repeat(6, 1fr); gap: 10px 8px; align-items: end; }
+  .grid .lbl { font-size: 12px; color: var(--dim); align-self: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sprite Gallery</h1>
+  <section><h2>Map reference vs. new creator sprite</h2><div class="row" id="ref"></div></section>
+  <section><h2>Classes</h2><div class="row" id="classes"></div></section>
+  <section><h2>Skin tones</h2><div class="row" id="skins"></div></section>
+  <section><h2>Hair style &times; color</h2><div class="grid" id="hair"></div></section>
+  <section><h2>Gear</h2><div class="row" id="gear"></div></section>
+  <section><h2>Sizes (1&times; is map size)</h2><div class="row" id="sizes"></div></section>
+</div>
+<script src="/game/items.js"></script>
+<script src="/game/sprite.js"></script>
+<script>
+  const { ITEMS, KITS } = GAME;
+  const base = { skin: 1, hc: 0, hs: 'short', equipment: {} };
+  const fig = (o, scale, cap, stage = true) =>
+    `<figure class="x${scale}">${stage ? `<div class="stage">${SPRITE.html(o)}</div>` : SPRITE.html(o)}<figcaption>${cap}</figcaption></figure>`;
+
+  document.getElementById('classes').innerHTML = Object.keys(KITS).map((k, i) =>
+    fig({ ...base, skin: [1, 0, 2, 3][i], hc: [1, 2, 3, 0][i], hs: ['short', 'long', 'short', 'long'][i], equipment: KITS[k] }, 4, k[0].toUpperCase() + k.slice(1))).join('');
+  document.getElementById('skins').innerHTML = SPRITE.SKINS.map((_, i) => fig({ ...base, skin: i }, 3, `Skin ${i + 1}`)).join('');
+  document.getElementById('hair').innerHTML = ['short', 'long', 'bald'].map((hs) =>
+    `<span class="lbl">${hs}</span>` + SPRITE.HAIRS.map((_, hc) => fig({ ...base, hs, hc }, 2, '', false)).join('')).join('');
+  document.getElementById('gear').innerHTML = Object.entries(ITEMS).map(([id, it]) =>
+    fig({ ...base, equipment: { [it.slot]: id } }, 2, it.name)).join('');
+  document.getElementById('sizes').innerHTML = [1, 2, 3, 4].map((s) => fig({ ...base, equipment: KITS.knight }, s, `${s}&times;`)).join('');
+
+  // Reference: frame 0 of the map's player sheet, checkerboard keyed out, next to the bare new sprite at the same height.
+  const img = new Image();
+  img.onload = () => {
+    const [sx, sy, sw, sh] = [105, 60, 133, 276], th = 192, tw = Math.round(sw * th / sh);
+    const c = document.createElement('canvas'); c.width = tw; c.height = th;
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
+    const id = x.getImageData(0, 0, tw, th), p = id.data;
+    for (let i = 0; i < p.length; i += 4) { const lo = Math.min(p[i], p[i + 1], p[i + 2]), hi = Math.max(p[i], p[i + 1], p[i + 2]); if (lo >= 196 && hi - lo <= 14) p[i + 3] = 0; }
+    x.putImageData(id, 0, 0);
+    const ref = document.getElementById('ref');
+    ref.innerHTML = `<figure><div class="stage" id="refStage"></div><figcaption>Map sprite (player.webp)</figcaption></figure>`
+      + fig(base, 4, 'New creator sprite (no gear)') + fig({ ...base, equipment: KITS.knight }, 4, 'With knight kit');
+    document.getElementById('refStage').appendChild(c);
+  };
+  img.src = '/game/world/assets/player.webp';
+</script>
+</body>
+</html>

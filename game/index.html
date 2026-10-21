@@ -70,16 +70,17 @@
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
 
   .stage {
-    height: 330px; border-radius: 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 22px; box-sizing: border-box;
+    height: 228px; border-radius: 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 14px; box-sizing: border-box;
     background: linear-gradient(#2a2148 0%, #5a4272 62%, #8a6a78 62.5%, #2e2538 62.6%, #1c1626 100%);
   }
-  .stage .big { width: 190px; }
-  .caption { text-align: center; margin: 14px 0 0; font-family: var(--display); font-size: 17px; }
+  .stage .big { width: 160px; }
+  .caption { text-align: center; margin: 10px 0 0; font-family: var(--display); font-size: 16px; }
   .caption small { display: block; font-family: var(--body); font-size: 13px; color: var(--dim); margin-top: 2px; }
-  .sizes { display: flex; align-items: flex-end; justify-content: center; gap: 22px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-  .sizes .s1 { width: 32px; } .sizes .s2 { width: 64px; }
+  .sizes { display: flex; align-items: flex-end; justify-content: center; gap: 22px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .sizes .s1 { width: 40px; } .sizes .s2 { width: 80px; }
   .sizes span { display: block; text-align: center; font-size: 12px; color: var(--dim); margin-top: 4px; }
-  svg.sprite { width: 100%; display: block; }
+  /* Sprites are 40x48 pixel art: only ever shown at 40 / 80 / 120 / 160px wide so pixels stay square. */
+  .sprite { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 
   .grp { margin-bottom: 20px; }
   .grp > .lbl { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
@@ -92,9 +93,20 @@
   .opt:hover { border-color: var(--accent); }
   .opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
   .classes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .cls { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 8px; }
-  .cls .mini { width: 40px; }
-  .sw { width: 32px; height: 32px; border-radius: 50%; background: var(--c); border: 2px solid rgba(255,255,255,0.15); padding: 0; }
+  .cls { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 6px; font-size: 14px; }
+  .cls .mini { display: block; width: 40px; }
+  .sw { width: 28px; height: 28px; border-radius: 50%; background: var(--c); border: 2px solid rgba(255,255,255,0.15); padding: 0; }
+
+  /* Creator is compact: everything fits one laptop screen without scrolling. */
+  #creator .wrap { max-width: 820px; padding-block: 20px; }
+  #creator .top { margin-bottom: 14px; }
+  #creator .top h2 { font-size: 19px; }
+  #creator .grid { grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 16px; }
+  #creator .panel { padding: 16px; }
+  #creator .grp { margin-bottom: 14px; }
+  #creator .grp > .lbl { margin-bottom: 6px; }
+  #creator .name { font-size: 16px; padding: 8px 10px; }
+  #creator .opt:not(.cls) { padding: 6px 12px; font-size: 14px; }
   .sw[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--bg); }
   .actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 6px; }
   #saveMsg { color: var(--dim); font-size: 14px; margin-right: auto; }
@@ -116,7 +128,7 @@
     height: 200px; border-radius: 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 14px; box-sizing: border-box;
     background: linear-gradient(#2a2148 0%, #5a4272 62%, #8a6a78 62.5%, #2e2538 62.6%, #1c1626 100%);
   }
-  .portrait > div { width: 100px; }
+  .portrait > div { width: 120px; }
   .card h3 { font-family: var(--display); font-size: 20px; margin: 14px 0 0; }
   .sub { color: var(--dim); font-size: 14px; margin: 2px 0 0; }
   .lvl { display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); margin-top: 14px; font-variant-numeric: tabular-nums; }
@@ -132,11 +144,29 @@
   .list li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.07); font-size: 15px; }
   .list li:last-child { border-bottom: 0; }
   .list .meta { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
+  .list em { color: #8fd694; font-style: normal; font-size: 13px; }
+  .list em.down { color: #ff9aa8; }
+  #aSlots li { align-items: center; }
+  .slotname { background: none; border: 0; padding: 0; width: 72px; text-align: left; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  .slotname[aria-pressed="true"] { color: var(--accent); }
+  #armSaved { color: var(--dim); font-size: 14px; }
+  .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .item {
+    display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; text-align: center;
+    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 6px; transition: border-color 0.15s, background 0.15s;
+  }
+  .item:hover { border-color: var(--accent); }
+  .item .mini { display: block; width: 80px; }
+  .item b { font-family: var(--display); font-size: 14px; }
+  .item small { color: var(--dim); font-size: 12px; }
+  .item.rare { border-color: rgba(232, 196, 106, 0.5); }
+  .item.rare b { color: #e8c46a; }
+  .item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 
   @media (max-width: 780px) {
     .grid, .home-grid { grid-template-columns: minmax(0, 1fr); }
-    .stage { height: 290px; }
-    .stage .big { width: 160px; }
+    .stage { height: 180px; }
+    .stage .big { width: 120px; }
   }
 </style>
 </head>
@@ -177,8 +207,8 @@
         <div class="stage"><div class="big" id="big"></div></div>
         <p class="caption" id="caption"></p>
         <div class="sizes">
-          <div><div class="s1" id="s1"></div><span>Small</span></div>
-          <div><div class="s2" id="s2"></div><span>Map size</span></div>
+          <div><div class="s1" id="s1"></div><span>Map size</span></div>
+          <div><div class="s2" id="s2"></div><span>2&times;</span></div>
         </div>
       </section>
       <section class="panel" aria-label="Customize">
@@ -203,6 +233,7 @@
       <h2>Taproot</h2>
       <div class="who">
         <span id="homeWho"></span>
+        <button class="btn ghost" id="armoryBtn" type="button">Armory</button>
         <button class="btn ghost" id="edit" type="button">Edit character</button>
         <button class="btn ghost" id="logout2" type="button">Log out</button>
       </div>
@@ -235,58 +266,51 @@
   </div>
 </main>
 
+<main class="screen" id="armory" hidden>
+  <div class="wrap">
+    <div class="top">
+      <h2>Armory</h2>
+      <div class="who">
+        <span id="armSaved" role="status"></span>
+        <button class="btn ghost" id="armBack" type="button">Back</button>
+      </div>
+    </div>
+    <div class="home-grid">
+      <div class="side">
+        <section class="panel card" aria-label="Character">
+          <div class="portrait"><div id="aSprite"></div></div>
+          <h3 id="aName"></h3>
+          <p class="sub" id="aClass"></p>
+        </section>
+        <section class="panel" aria-label="Stats">
+          <h3 class="h">Stats</h3>
+          <ul class="list" id="aStats"></ul>
+        </section>
+      </div>
+      <div class="main">
+        <section class="panel" aria-label="Equipped">
+          <h3 class="h">Equipped</h3>
+          <ul class="list" id="aSlots"></ul>
+        </section>
+        <section class="panel" aria-label="Inventory">
+          <h3 class="h" id="aItemsTitle">Inventory</h3>
+          <div class="items" id="aItems"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="/game/items.js"></script>
+<script src="/game/sprite.js"></script>
 <script>
   const CLASSES = [['knight', 'Knight'], ['mage', 'Mage'], ['ranger', 'Ranger'], ['rogue', 'Rogue']];
-  const SKINS = ['#f1c9a5', '#e0a878', '#c68642', '#8d5524', '#5a3a22'];
-  const HAIRS = ['#2b1b12', '#6b3f1d', '#d9b25a', '#a63d2a', '#d8d4cc', '#3b4f8a'];
+  const { SKINS, HAIRS } = SPRITE;
   const STYLES = [['short', 'Short'], ['long', 'Long'], ['bald', 'Bald']];
-  const PAL = {
-    knight: { body: '#8f97a3', dark: '#5d6470', acc: '#a63d3d', pants: '#4a4f5a' },
-    mage:   { body: '#5b3f9a', dark: '#3d2a6b', acc: '#d4a94f', pants: '#3d2a6b' },
-    ranger: { body: '#4a7a3e', dark: '#33552b', acc: '#8b5e3c', pants: '#6b4a2e' },
-    rogue:  { body: '#3a3a46', dark: '#25252e', acc: '#8a8f99', pants: '#2b2b34' },
-  };
+  const { ITEMS, SLOTS, STAT_KEYS, STAT_LABELS, BASE, defaultEquipment, computeStats } = GAME;
+  const sprite = SPRITE.html;
 
-  function sprite(o) {
-    const P = PAL[o.cls], skin = SKINS[o.skin], hair = HAIRS[o.hc];
-    let s = '';
-    const r = (x, y, w, h, c) => { s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}"/>`; };
-    s += '<ellipse cx="8" cy="23.2" rx="5.5" ry="0.8" fill="#000" opacity=".35"/>';
-
-    if (o.cls === 'mage')   { r(14, 7, 1, 16, '#6b4a2e'); r(13, 4, 3, 3, '#6ac4ff'); r(14, 3, 1, 1, '#bfe9ff'); }
-    if (o.cls === 'ranger') { r(14, 8, 1, 13, '#8b5e3c'); r(13, 8, 1, 1, '#8b5e3c'); r(13, 20, 1, 1, '#8b5e3c'); }
-    if (o.cls === 'knight') { r(14, 9, 1, 8, '#d8dde6'); r(13, 16, 3, 1, '#d4a94f'); r(14, 17, 1, 2, '#6b4a2e'); }
-    if (o.cls === 'rogue')  { r(14, 14, 1, 3, '#cfd4dc'); r(13, 17, 3, 1, '#6b4a2e'); }
-
-    r(5, 17, 3, 5, P.pants); r(8, 17, 3, 5, P.pants);
-    r(5, 21, 3, 2, P.dark); r(8, 21, 3, 2, P.dark);
-    if (o.cls === 'mage') { r(4, 16, 8, 6, P.body); r(4, 21, 8, 1, P.dark); }
-
-    r(4, 10, 8, 7, P.body); r(2, 10, 2, 6, P.body); r(12, 10, 2, 6, P.body);
-    r(2, 16, 2, 1, skin); r(12, 16, 2, 1, skin);
-    r(4, 15, 8, 1, o.cls === 'mage' ? P.acc : P.dark);
-    if (o.cls === 'knight') { r(7, 10, 2, 5, P.acc); r(2, 10, 2, 2, P.dark); r(12, 10, 2, 2, P.dark); }
-    if (o.cls === 'ranger') r(7, 10, 2, 2, P.acc);
-    if (o.cls === 'rogue')  r(4, 10, 8, 1, P.dark);
-
-    r(7, 9, 2, 1, skin); r(5, 3, 6, 6, skin);
-    r(6, 6, 1, 1, '#1d1a1a'); r(9, 6, 1, 1, '#1d1a1a'); r(7, 8, 2, 1, '#a5614a');
-
-    if (o.hs !== 'bald') {
-      r(5, 2, 6, 2, hair); r(4, 3, 1, 3, hair); r(11, 3, 1, 3, hair);
-      if (o.hs === 'long') { r(4, 3, 1, 9, hair); r(11, 3, 1, 9, hair); }
-    }
-
-    if (o.cls === 'knight') { r(4, 2, 8, 3, P.body); r(4, 5, 1, 3, P.body); r(11, 5, 1, 3, P.body); r(7, 4, 2, 3, P.dark); r(7, 0, 2, 2, P.acc); }
-    if (o.cls === 'mage')   { r(7, 0, 2, 1, P.body); r(6, 1, 4, 1, P.body); r(5, 2, 6, 1, P.body); r(3, 3, 10, 1, P.dark); }
-    if (o.cls === 'ranger' || o.cls === 'rogue') {
-      r(5, 1, 6, 1, P.body); r(4, 2, 8, 2, P.body); r(4, 4, 1, 5, P.body); r(11, 4, 1, 5, P.body);
-      if (o.cls === 'rogue') r(5, 7, 6, 2, P.dark);
-    }
-    return `<svg class="sprite" viewBox="0 0 16 24" shape-rendering="crispEdges" role="img" aria-label="${o.cls}">${s}</svg>`;
-  }
-
-  const S = { name: 'Aldric', cls: 'knight', skin: 1, hs: 'short', hc: 1 };
+  const S = { name: 'Aldric', cls: 'knight', skin: 1, hs: 'short', hc: 1, equipment: defaultEquipment('knight') };
   const $ = (id) => document.getElementById(id);
 
   $('cls').innerHTML = CLASSES.map(([k, n]) => `<button type="button" class="opt cls" data-k="cls" data-v="${k}"><span class="mini" data-mini="${k}"></span><span>${n}</span></button>`).join('');
@@ -299,7 +323,7 @@
     $('big').innerHTML = sprite(S);
     $('s1').innerHTML = sprite(S);
     $('s2').innerHTML = sprite(S);
-    document.querySelectorAll('[data-mini]').forEach((el) => { el.innerHTML = sprite({ ...S, cls: el.dataset.mini }); });
+    document.querySelectorAll('[data-mini]').forEach((el) => { el.innerHTML = sprite({ ...S, equipment: defaultEquipment(el.dataset.mini) }); });
     document.querySelectorAll('[data-k]').forEach((b) => b.setAttribute('aria-pressed', String(String(S[b.dataset.k]) === b.dataset.v)));
     const label = CLASSES.find(([k]) => k === S.cls)[1];
     $('caption').innerHTML = `${S.name.trim() || 'Unnamed'}<small>${label}</small>`;
@@ -310,23 +334,24 @@
     if (!b) return;
     const k = b.dataset.k;
     S[k] = (k === 'skin' || k === 'hc') ? Number(b.dataset.v) : b.dataset.v;
+    if (k === 'cls') S.equipment = defaultEquipment(S.cls);
     update();
   });
   $('name').addEventListener('input', (e) => { S.name = e.target.value; update(); });
   $('rand').addEventListener('click', () => {
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
-    S.cls = pick(CLASSES)[0]; S.skin = Math.floor(Math.random() * SKINS.length);
+    S.cls = pick(CLASSES)[0]; S.equipment = defaultEquipment(S.cls); S.skin = Math.floor(Math.random() * SKINS.length);
     S.hs = pick(STYLES)[0]; S.hc = Math.floor(Math.random() * HAIRS.length);
     update();
   });
 
   function show(name) {
-    ['landing', 'creator', 'home'].forEach((n) => { $(n).hidden = n !== name; });
+    ['landing', 'creator', 'home', 'armory'].forEach((n) => { $(n).hidden = n !== name; });
     $('bg').classList.toggle('dim', name !== 'landing');
     window.scrollTo(0, 0);
   }
 
-  const player = { username: '', hasChar: false };
+  const player = { username: '', hasChar: false, inventory: [] };
   const BAG = [['Wood', 12], ['Iron Ore', 4], ['Berries', 7], ['Herbs', 3]];
   const QUESTS = [['Speak to the Gatekeeper', '+20 XP'], ['Gather 10 Wood', '+30 XP'], ['Claim your first plot', '+50 XP']];
 
@@ -372,10 +397,12 @@
 
   function enterGame(user) {
     player.username = user.username;
+    player.inventory = user.inventory || [];
     player.hasChar = !!user.character;
     $('who').textContent = user.username;
     if (user.character) {
       Object.assign(S, user.character);
+      S.equipment = { ...(user.character.equipment || defaultEquipment(user.character.cls)) };
       $('name').value = S.name;
       update();
       renderHome();
@@ -438,6 +465,60 @@
   }));
   $('edit').addEventListener('click', () => show('creator'));
   $('back').addEventListener('click', () => show(player.hasChar ? 'home' : 'landing'));
+
+  let armTab = 'head';
+  const SLOT_NAMES = { head: 'Head', body: 'Body', weapon: 'Weapon' };
+  const chips = (st) => Object.entries(st).map(([k, v]) => `${STAT_LABELS[k]} ${v > 0 ? '+' : ''}${v}`).join(' · ');
+
+  function renderArmory() {
+    const eq = S.equipment;
+    $('aSprite').innerHTML = sprite(S);
+    $('aName').textContent = S.name.trim() || player.username;
+    $('aClass').textContent = CLASSES.find(([k]) => k === S.cls)[1];
+
+    const total = computeStats(S.cls, eq);
+    $('aStats').innerHTML = STAT_KEYS.map((k) => {
+      const bonus = total[k] - BASE[S.cls][k];
+      const tag = bonus ? ` <em class="${bonus > 0 ? 'up' : 'down'}">${bonus > 0 ? '+' : ''}${bonus}</em>` : '';
+      return `<li><span>${STAT_LABELS[k]}</span><span class="meta">${total[k]}${tag}</span></li>`;
+    }).join('');
+
+    $('aSlots').innerHTML = SLOTS.map((slot) => {
+      const it = eq[slot] ? ITEMS[eq[slot]] : null;
+      return `<li><button type="button" class="slotname" data-tab="${slot}" aria-pressed="${armTab === slot}">${SLOT_NAMES[slot]}</button>`
+        + `<span class="${it ? '' : 'meta'}">${it ? it.name : 'Empty'}</span>`
+        + (it ? `<button type="button" class="linkbtn" data-unequip="${slot}">Unequip</button>` : '<span></span>') + '</li>';
+    }).join('');
+
+    $('aItemsTitle').textContent = SLOT_NAMES[armTab] + ' items';
+    const owned = player.inventory.filter((id) => ITEMS[id] && ITEMS[id].slot === armTab);
+    $('aItems').innerHTML = owned.map((id) => {
+      const it = ITEMS[id];
+      return `<button type="button" class="item ${it.rarity}" data-equip="${id}" aria-pressed="${eq[armTab] === id}">`
+        + `<span class="mini">${sprite({ ...S, equipment: { ...eq, [armTab]: id } })}</span><b>${it.name}</b><small>${chips(it.stats)}</small></button>`;
+    }).join('') || '<p class="sub">Nothing here yet.</p>';
+  }
+
+  let saveQueue = Promise.resolve();
+  function persist() {
+    $('armSaved').textContent = 'Saving...';
+    saveQueue = saveQueue
+      .then(() => api('save', { character: S }))
+      .then(() => { $('armSaved').textContent = 'Saved'; })
+      .catch((err) => { $('armSaved').textContent = err.status === 401 ? 'Session expired, sign in again' : err.message; });
+  }
+
+  $('armory').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-tab], [data-unequip], [data-equip]');
+    if (!t) return;
+    if (t.dataset.tab) armTab = t.dataset.tab;
+    else if (t.dataset.unequip) S.equipment[t.dataset.unequip] = null;
+    else S.equipment[armTab] = S.equipment[armTab] === t.dataset.equip ? null : t.dataset.equip;
+    renderArmory();
+    if (!t.dataset.tab) persist();
+  });
+  $('armoryBtn').addEventListener('click', () => { $('armSaved').textContent = ''; renderArmory(); show('armory'); });
+  $('armBack').addEventListener('click', () => { renderHome(); update(); show('home'); });
 
   buildHome();
   update();
