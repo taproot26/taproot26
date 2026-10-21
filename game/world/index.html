@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taproot Overworld</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #2f7d2b; overflow: hidden; }
+  #game { position: fixed; inset: 0; }
+  canvas { display: block; image-rendering: pixelated; }
+  .hud { position: fixed; left: 12px; top: 12px; z-index: 2; font: 600 13px/1.5 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75); pointer-events: none; }
+  .hud a { color: #fff; pointer-events: auto; }
+  #minimap {
+    position: fixed; right: 12px; top: 12px; z-index: 2; width: 192px; height: 144px;
+    border: 3px solid #1f3a1f; border-radius: 6px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    image-rendering: pixelated; background: #2f7d2b;
+  }
+  @media (max-width: 600px) { #minimap { width: 128px; height: 96px; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+</head>
+<body>
+<div id="game"></div>
+<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">Go to the city</a><br>Arrow keys / WASD to move, Shift to run</div>
+<canvas id="minimap" width="192" height="144" aria-label="Minimap"></canvas>
+
+<script>
+/* ============================================================================
+   Gen 3 style overworld (Phaser 3, 16x16 tiles, pixelArt: true)
+
+   ART: assets/objects.webp (props + tiles) and assets/player.webp (8 poses).
+   Both sheets have the checkerboard painted in as real pixels, so keyOut()
+   removes it at load, then each sprite is cut out (SHEET / PLAYER_SHEET hold
+   the pixel rects) and shrunk to its in-game size (the *_H tables).
+
+   SWAPPING IN REAL ASSETS / A TILED MAP LATER
+   - Real art: drop real sprites in and replace buildTextures() with plain
+     this.load.image / this.load.spritesheet calls. Keep the texture keys.
+   - Map: replace paintGround() + placeObjects() with
+       preload: this.load.image('tiles', 'tiles.png');
+                this.load.tilemapTiledJSON('route', 'route.json');
+       create:  const map = this.make.tilemap({ key: 'route' });
+                const ts  = map.addTilesetImage('<tileset name in Tiled>', 'tiles');
+                map.createLayer('ground', ts); map.createLayer('objects', ts);
+     then fill this.blocked[y][x] from tiles with a custom property
+     collides = true. The rest only reads this.blocked.
+   ============================================================================ */
+
+const T = 16, MAP_W = 48, MAP_H = 36;
+const MINI = 4; // minimap pixels per tile
+
+/* ---------- where each sprite sits on the sheets: [x, y, w, h] ---------- */
+const SHEET = {
+  tall_a: [35, 47, 147, 130], tall_b: [215, 50, 145, 127], tall_dry: [393, 51, 151, 128],
+  dirt: [585, 42, 147, 141], dirt_edge: [772, 41, 149, 142], water: [36, 590, 140, 127],
+  tree_round: [40, 211, 139, 154], tree_pine: [219, 211, 121, 154], bush: [553, 221, 139, 139],
+  stump_tall: [720, 231, 103, 126], stump_short: [857, 252, 114, 104], boulder: [1003, 245, 116, 108],
+  fence: [41, 441, 131, 87], house_a: [688, 401, 136, 145], house_b: [848, 407, 127, 139],
+  flower_white: [728, 619, 75, 83], flower_pink: [837, 622, 74, 81], flower_yellow: [944, 623, 75, 80], flower_blue: [1053, 629, 74, 74],
+};
+// in-game height in pixels (width follows the sprite's aspect ratio)
+const SPRITE_H = {
+  tall_a: 19, tall_b: 19, tall_dry: 19, tree_round: 44, tree_pine: 46, bush: 20, stump_tall: 17, stump_short: 14,
+  boulder: 17, fence: 16, house_a: 85, house_b: 70, flower_white: 13, flower_pink: 13, flower_yellow: 13, flower_blue: 12,
+};
+// player.webp: down, down, left, left, right, right, up, up
+const PLAYER_SHEET = [[105, 60, 133, 276], [373, 62, 132, 273], [639, 66, 130, 269], [904, 67, 130, 269],
+  [101, 409, 131, 270], [366, 409, 130, 270], [641, 412, 128, 270], [907, 414, 127, 271]];
+const PLAYER_DIRS = ['down', 'left', 'right', 'up'];
+const CHAR_H = 26, CHAR_W = 14;
+
+/* ---------- map data (tile coordinates) ---------- */
+// [x1, y1, x2, y2, radius] capsules that form the dirt paths
+const PATHS = [
+  [38.5, 7.3, 38.5, 10.5, 1.4], [38.5, 10.5, 34, 12.2, 1.5], [34, 12.2, 28, 13.2, 1.7],
+  [28, 13.2, 24.5, 16.5, 2.0], [24.5, 16.5, 24.5, 21, 2.4], [24.5, 21, 25.5, 22.5, 2.2],
+  [0, 19, 6, 19.5, 2.6], [6, 19.5, 10, 23.5, 2.4], [10, 23.5, 16, 28, 2.3], [16, 28, 20, 33, 2.4], [20, 33, 21, 36, 2.4],
+  [24.5, 21, 20, 25, 2.0], [20, 25, 16, 28, 2.0],
+  [4, 15.5, 8, 14.6, 1.4], [8, 14.6, 13, 13.5, 1.5], [13, 13.5, 17, 11, 1.6],
+];
+const PONDS = [
+  { cx: 5.5, cy: 5.6, rx: 5.6, ry: 3.5 },
+  { cx: 0.5, cy: 32.2, rx: 5.2, ry: 4.4 },
+  { cx: 47.5, cy: 33.5, rx: 5.2, ry: 4.6, murky: true },
+];
+const TALL = [[11, 15, 21, 23, 'g'], [34, 15, 44, 23, 'g'], [28, 3, 35, 9, 'g'], [24, 28, 29, 33, 'g'], [10, 30, 14, 33, 'd'], [2, 22, 6, 26, 'd']]; // x1,y1,x2,y2,type
+const HOUSE_A = { x: 36, y: 3, w: 5, h: 4 };
+const HOUSE_B = { x: 2, y: 12, w: 4, h: 3 };
+const START = { x: 24, y: 19 };
+const BUSHES = [[10, 11], [2, 17], [44, 9], [45, 20], [7, 28], [9, 30], [8, 33], [11, 29], [6, 31], [36, 34], [39, 33], [43, 27], [14, 22], [27, 10]];
+const STUMPS = [[22, 8, 'tall'], [31, 18, 'short'], [8, 20, 'short'], [41, 12, 'tall'], [18, 30, 'short']];
+const FLOWERS = [[15, 5], [10, 9], [1, 22], [3, 17], [7, 31], [34, 28], [37, 29], [40, 28], [45, 9], [46, 19], [30, 30], [19, 27], [15, 31], [33, 10], [27, 10], [4, 25], [12, 16]];
+const TREES = [];
+for (let x = 0; x < MAP_W; x += 2) TREES.push([x, 0]);
+[13, 15, 17, 19, 21, 23, 25, 44, 46].forEach((x) => TREES.push([x, 2]));
+[[33, 2], [44, 4], [46, 4], [46, 8], [46, 10], [12, 4], [0, 10], [0, 12], [2, 9], [0, 14], [0, 23], [0, 25], [2, 24], [9, 17], [22, 9],
+ [46, 15], [46, 25], [46, 22], [32, 32], [35, 31], [38, 32], [7, 34], [9, 34], [11, 34], [13, 34], [15, 34], [8, 32], [12, 31],
+ [44, 6], [46, 6], [18, 5], [16, 8], [20, 10], [32, 17], [31, 22], [33, 23], [27, 2], [29, 1], [30, 28], [20, 29]]
+  .forEach((t) => TREES.push(t));
+for (let x = 25; x < MAP_W; x += 2) TREES.push([x, 34]);
+// Opening in the top tree wall that lines up with the city's south gate.
+const NORTH_GATE = [22, 25];
+for (let i = TREES.length - 1; i >= 0; i--) {
+  const [tx, ty] = TREES[i];
+  if (ty <= 2 && tx >= NORTH_GATE[0] - 1 && tx <= NORTH_GATE[1] + 1) TREES.splice(i, 1);
+}
+const FENCES = [[40, 47, 13], [26, 39, 25], [41, 47, 25]]; // x1, x2, row
+
+/* ---------- tiny helpers ---------- */
+function hash(x, y, s) {
+  let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1013904223)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise(x, y, s) {
+  const gx = x / s, gy = y / s, x0 = Math.floor(gx), y0 = Math.floor(gy);
+  const u = (gx - x0) ** 2 * (3 - 2 * (gx - x0)), v = (gy - y0) ** 2 * (3 - 2 * (gy - y0));
+  const a = hash(x0, y0, 7), b = hash(x0 + 1, y0, 7), c = hash(x0, y0 + 1, 7), d = hash(x0 + 1, y0 + 1, 7);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+
+/* ---------- sheet processing ---------- */
+// The sheets are opaque with a painted checkerboard: flood-fill it away from the edges.
+function keyOut(img) {
+  const W = img.naturalWidth, H = img.naturalHeight;
+  const c = canvasOf(W, H), x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(img, 0, 0);
+  const id = x.getImageData(0, 0, W, H), d = id.data;
+  const neutral = (i, minV, spread) => {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    return Math.max(r, g, b) - Math.min(r, g, b) <= spread && Math.min(r, g, b) >= minV;
+  };
+  const bg = new Uint8Array(W * H), stack = [];
+  const push = (px, py) => {
+    if (px < 0 || py < 0 || px >= W || py >= H) return;
+    const k = py * W + px;
+    if (bg[k] || !neutral(k * 4, 196, 14)) return;
+    bg[k] = 1; stack.push(k);
+  };
+  for (let i = 0; i < W; i++) { push(i, 0); push(i, H - 1); }
+  for (let j = 0; j < H; j++) { push(0, j); push(W - 1, j); }
+  while (stack.length) { const k = stack.pop(), px = k % W, py = (k / W) | 0; push(px + 1, py); push(px - 1, py); push(px, py + 1); push(px, py - 1); }
+  for (let k = 0; k < W * H; k++) if (bg[k]) d[k * 4 + 3] = 0;
+  for (let pass = 0; pass < 2; pass++) { // strip the light halo left on sprite edges
+    const kill = [];
+    for (let py = 1; py < H - 1; py++) for (let px = 1; px < W - 1; px++) {
+      const k = py * W + px;
+      if (d[k * 4 + 3] === 0) continue;
+      if (d[(k - 1) * 4 + 3] === 0 || d[(k + 1) * 4 + 3] === 0 || d[(k - W) * 4 + 3] === 0 || d[(k + W) * 4 + 3] === 0) {
+        if (neutral(k * 4, 185, 22)) kill.push(k);
+      }
+    }
+    kill.forEach((k) => { d[k * 4 + 3] = 0; });
+  }
+  x.putImageData(id, 0, 0);
+  return c;
+}
+
+// Smooth shrink of a rect of `src` to tw x th. crisp = hard alpha edge (keeps the pixel-art silhouette).
+function shrink(src, sx, sy, sw, sh, tw, th, crisp = true) {
+  let cur = canvasOf(sw, sh);
+  cur.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+  while (cur.width >= tw * 2 && cur.height >= th * 2) {
+    const n = canvasOf(Math.floor(cur.width / 2), Math.floor(cur.height / 2)), nx = n.getContext('2d');
+    nx.imageSmoothingEnabled = true; nx.imageSmoothingQuality = 'high';
+    nx.drawImage(cur, 0, 0, n.width, n.height);
+    cur = n;
+  }
+  const out = canvasOf(tw, th), ox = out.getContext('2d', { willReadFrequently: true });
+  ox.imageSmoothingEnabled = true; ox.imageSmoothingQuality = 'high';
+  ox.drawImage(cur, 0, 0, tw, th);
+  if (crisp) {
+    const id = ox.getImageData(0, 0, tw, th), d = id.data;
+    for (let i = 3; i < d.length; i += 4) d[i] = d[i] < 110 ? 0 : 255;
+    ox.putImageData(id, 0, 0);
+  }
+  return out;
+}
+
+// Opaque tile -> 2x2 mirrored pattern (mirroring hides the seams) returned as raw pixels.
+function makePattern(clean, [sx, sy, sw, sh], inset, pw, ph) {
+  const tile = shrink(clean, sx + inset, sy + inset, sw - inset * 2, sh - inset * 2, pw, ph, false);
+  const c = canvasOf(pw * 2, ph * 2), x = c.getContext('2d', { willReadFrequently: true });
+  [[0, 0, 1, 1], [pw, 0, -1, 1], [0, ph, 1, -1], [pw, ph, -1, -1]].forEach(([ox, oy, fx, fy]) => {
+    x.save(); x.translate(fx < 0 ? ox + pw : ox, fy < 0 ? oy + ph : oy); x.scale(fx, fy); x.drawImage(tile, 0, 0); x.restore();
+  });
+  return { w: pw * 2, h: ph * 2, data: x.getImageData(0, 0, pw * 2, ph * 2).data };
+}
+
+function sampleAvg(clean, x, y, w, h) {
+  const d = clean.getContext('2d', { willReadFrequently: true }).getImageData(x, y, w, h).data;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+  return n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : [110, 190, 70];
+}
+
+function buildTextures(scene) {
+  const objects = keyOut(scene.textures.get('sheet_objects').getSourceImage());
+  const player = keyOut(scene.textures.get('sheet_player').getSourceImage());
+
+  Object.keys(SPRITE_H).forEach((name) => {
+    const [sx, sy, sw, sh] = SHEET[name], th = SPRITE_H[name], tw = Math.round(sw * th / sh);
+    scene.textures.addCanvas(name, shrink(objects, sx, sy, sw, sh, tw, th));
+  });
+
+  // 8 poses: 2 frames per direction, feet on the bottom edge, centred horizontally.
+  const f = CHAR_H / 271;
+  PLAYER_SHEET.forEach(([sx, sy, sw, sh], i) => {
+    const tw = Math.round(sw * f), th = Math.round(sh * f);
+    const c = canvasOf(CHAR_W, CHAR_H + 1), x = c.getContext('2d');
+    x.drawImage(shrink(player, sx, sy, sw, sh, tw, th), Math.round((CHAR_W - tw) / 2), CHAR_H + 1 - th);
+    const dir = PLAYER_DIRS[i >> 1], n = i & 1;
+    scene.textures.addCanvas(`player_${dir}_${n}`, c);
+  });
+
+  scene.textures.addCanvas('spark', (() => { const c = canvasOf(2, 2); c.getContext('2d').fillStyle = '#fff'; c.getContext('2d').fillRect(0, 0, 2, 2); return c; })());
+
+  return {
+    dirt: sampleAvg(objects, SHEET.dirt[0] + 30, SHEET.dirt[1] + 30, 87, 81),
+    water: makePattern(objects, SHEET.water, 20, 26, 22),
+    fringe: sampleAvg(objects, SHEET.dirt_edge[0] + 70, SHEET.dirt_edge[1] + 12, 30, 6),
+  };
+}
+
+/* ---------- world queries ---------- */
+function distSeg(px, py, s) {
+  const dx = s[2] - s[0], dy = s[3] - s[1];
+  const t = Math.max(0, Math.min(1, ((px - s[0]) * dx + (py - s[1]) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(px - (s[0] + t * dx), py - (s[1] + t * dy));
+}
+// pixel coords -> distance outside the dirt path in tiles (< 0 means on the path)
+function pathEdge(x, y) {
+  const tx = x / T, ty = y / T;
+  let best = 1e9;
+  for (const s of PATHS) best = Math.min(best, distSeg(tx, ty, s) - s[4]);
+  return best + (hash(x >> 2, y >> 2, 3) - 0.5) * 0.35 + (hash(x, y, 9) - 0.5) * 0.08;
+}
+function waterAt(x, y) {
+  const tx = x / T, ty = y / T;
+  for (let i = 0; i < PONDS.length; i++) {
+    const p = PONDS[i];
+    const d = ((tx - p.cx) / p.rx) ** 2 + ((ty - p.cy) / p.ry) ** 2 + (hash(x >> 2, y >> 2, 5) - 0.5) * 0.16;
+    if (d < 1) return i;
+  }
+  return -1;
+}
+const SAMPLES = [[2, 2], [8, 2], [14, 2], [2, 8], [8, 8], [14, 8], [2, 14], [8, 14], [14, 14]];
+const touchesPath = (cx, cy, m) => SAMPLES.some(([ox, oy]) => pathEdge(cx * T + ox, cy * T + oy) < m);
+const isWaterCell = (cx, cy) => SAMPLES.filter(([ox, oy]) => waterAt(cx * T + ox, cy * T + oy) >= 0).length >= 3;
+
+/* ---------- scene ---------- */
+class Overworld extends Phaser.Scene {
+  constructor() { super('overworld'); }
+
+  preload() {
+    this.load.image('sheet_objects', '/game/world/assets/objects.webp');
+    this.load.image('sheet_player', '/game/world/assets/player.webp');
+  }
+
+  create() {
+    this.blocked = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(false));
+    this.marks = []; // everything placed, so the minimap can draw it
+    this.pat = buildTextures(this);
+    this.placeObjects();
+    this.paintGround();
+    this.placeGrassAndFlowers();
+    this.addCharacters();
+    this.addSparkles();
+    this.buildMinimap();
+
+    const cam = this.cameras.main;
+    const zoom = () => Math.max(2, Math.min(4, Math.floor(Math.min(window.innerWidth / 320, window.innerHeight / 220))));
+    cam.setBounds(0, 0, MAP_W * T, MAP_H * T);
+    cam.setZoom(zoom());
+    cam.startFollow(this.player, true, 0.2, 0.2);
+    this.scale.on('resize', () => cam.setZoom(zoom()));
+
+    const K = Phaser.Input.Keyboard.KeyCodes;
+    this.keys = this.input.keyboard.addKeys({
+      left: K.LEFT, right: K.RIGHT, up: K.UP, down: K.DOWN, a: K.A, d: K.D, w: K.W, s: K.S, shift: K.SHIFT,
+    });
+    this.facing = 'down';
+    this.walkT = 0;
+  }
+
+  block(tx, ty, w, h) { for (let y = ty; y < ty + h; y++) for (let x = tx; x < tx + w; x++) if (this.blocked[y]) this.blocked[y][x] = true; }
+
+  isFree(tx, ty, w, h, m = 0.1) {
+    for (let y = ty; y < ty + h; y++) for (let x = tx; x < tx + w; x++) {
+      if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H || this.blocked[y][x] || touchesPath(x, y, m)) return false;
+    }
+    return true;
+  }
+
+  // Sprites are centred on their tile footprint, bottom-aligned, and depth-sorted by their bottom edge.
+  addObject(key, tx, ty, w, h) {
+    this.add.image(tx * T + (w * T) / 2, (ty + h) * T, key).setOrigin(0.5, 1).setDepth((ty + h) * T);
+    this.block(tx, ty, w, h);
+    this.marks.push({ key, tx, ty, w, h });
+  }
+
+  placeObjects() {
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (isWaterCell(x, y)) this.blocked[y][x] = true;
+
+    this.addObject('house_a', HOUSE_A.x, HOUSE_A.y, HOUSE_A.w, HOUSE_A.h);
+    this.addObject('house_b', HOUSE_B.x, HOUSE_B.y, HOUSE_B.w, HOUSE_B.h);
+
+    // Fence pieces overlap by one post so a run reads as one continuous fence.
+    const fw = this.textures.get('fence').getSourceImage().width, step = fw - Math.round(fw * 22 / 131);
+    FENCES.forEach(([x1, x2, row]) => {
+      const start = x1 * T, end = (x2 + 1) * T;
+      for (let px = start; px < end - 2; px += step) {
+        this.add.image(px, (row + 1) * T, 'fence').setOrigin(0, 1).setDepth((row + 1) * T);
+      }
+      this.block(x1, row, x2 - x1 + 1, 1);
+      this.marks.push({ key: 'fence', tx: x1, ty: row, w: x2 - x1 + 1, h: 1 });
+    });
+
+    TREES.forEach(([x, y]) => {
+      if (this.isFree(x, y, 2, 2)) this.addObject(hash(x, y, 61) > 0.3 ? 'tree_pine' : 'tree_round', x, y, 2, 2);
+    });
+    BUSHES.forEach(([x, y]) => { if (this.isFree(x, y, 1, 1, 0.3)) this.addObject('bush', x, y, 1, 1); });
+    STUMPS.forEach(([x, y, k]) => { if (this.isFree(x, y, 1, 1, 0.3)) this.addObject(k === 'tall' ? 'stump_tall' : 'stump_short', x, y, 1, 1); });
+
+    const seen = new Set();
+    PONDS.forEach((p) => {
+      for (let k = 0; k < 28; k++) {
+        const a = (k / 28) * Math.PI * 2;
+        const x = Math.round(p.cx + (p.rx + 0.9) * Math.cos(a) - 0.5);
+        const y = Math.round(p.cy + (p.ry + 0.9) * Math.sin(a) - 0.5);
+        const id = `${x},${y}`;
+        if (seen.has(id) || hash(x, y, 21) > 0.8) continue;
+        seen.add(id);
+        if (this.isFree(x, y, 1, 1, 0.3)) this.addObject('boulder', x, y, 1, 1);
+      }
+    });
+  }
+
+  paintGround() {
+    const w = MAP_W * T, h = MAP_H * T;
+    const tex = this.textures.createCanvas('ground', w, h);
+    const ctx = tex.getContext();
+    const img = ctx.createImageData(w, h);
+    const G = ['#50b93d', '#4aaf39', '#58c244', '#54bd41'].map(rgb);
+    const speck = rgb('#7fd85c');
+    const { dirt, water, fringe } = this.pat;
+    const murky = (c) => [c[0] * 0.55, c[1] * 0.85, c[2] * 0.7];
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const r = hash(x, y, 1), patch = vnoise(x, y, 14);
+        let c = r > 0.985 ? speck : r < 0.1 ? (patch > 0.55 ? G[1] : G[3]) : patch > 0.7 ? G[1] : patch < 0.25 ? G[2] : G[0];
+        const e = pathEdge(x, y);
+        if (e < 0) {
+          // sand colour from the dirt tile, with scattered pebbles
+          const cell = hash(x >> 2, y >> 2, 71), px = x & 3, py = y & 3;
+          const ox = hash(x >> 2, y >> 2, 74) < 0.5 ? 0 : 1, oy = hash(x >> 2, y >> 2, 75) < 0.5 ? 0 : 1;
+          let k = 1 + (hash(x, y, 72) - 0.5) * 0.1;
+          if (cell > 0.84 && px >= ox && px <= ox + 1 && py >= oy && py <= oy + 1) k *= px === ox && py === oy ? 1.12 : 0.76;
+          else if (cell < 0.05) k *= 1.1;
+          c = [Math.min(255, dirt[0] * k), Math.min(255, dirt[1] * k), Math.min(255, dirt[2] * k)];
+        } else if (e < 0.22) c = hash(x, y, 12) > 0.7 ? dirt : fringe;
+        const wi = waterAt(x, y);
+        if (wi >= 0) {
+          const i = ((y % water.h) * water.w + (x % water.w)) * 4;
+          c = [water.data[i], water.data[i + 1], water.data[i + 2]];
+          if (PONDS[wi].murky) c = murky(c);
+        }
+        const i = (y * w + x) * 4;
+        img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    for (let cy = 0; cy < MAP_H; cy++) for (let cx = 0; cx < MAP_W; cx++) {
+      if (this.blocked[cy][cx] || hash(cx, cy, 41) > 0.22) continue;
+      const x = cx * T + 3 + Math.floor(hash(cx, cy, 42) * 10), y = cy * T + 5 + Math.floor(hash(cx, cy, 43) * 8);
+      if (pathEdge(x, y) < 0.3 || waterAt(x, y) >= 0) continue;
+      ctx.fillStyle = '#3f9f36';
+      ctx.fillRect(x, y, 1, 1); ctx.fillRect(x - 1, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1);
+    }
+    tex.refresh();
+    this.add.image(0, 0, 'ground').setOrigin(0).setDepth(0);
+  }
+
+  // Grass clumps and flowers are sprites, so they sort with the player (grass hides the feet like in Gen 3).
+  placeGrassAndFlowers() {
+    const region = (cx, cy) => {
+      for (const [x1, y1, x2, y2, type] of TALL) {
+        if (cx < x1 || cx > x2 || cy < y1 || cy > y2) continue;
+        const border = cx === x1 || cx === x2 || cy === y1 || cy === y2;
+        if (!border || hash(cx, cy, 31) > 0.35) return type;
+      }
+      return null;
+    };
+    for (let cy = 0; cy < MAP_H; cy++) for (let cx = 0; cx < MAP_W; cx++) {
+      const type = region(cx, cy);
+      if (!type || this.blocked[cy][cx] || touchesPath(cx, cy, 0.25)) continue;
+      const key = type === 'd' ? 'tall_dry' : hash(cx, cy, 33) > 0.5 ? 'tall_a' : 'tall_b';
+      const x = cx * T + 8 + Math.round((hash(cx, cy, 34) - 0.5) * 2), y = (cy + 1) * T + Math.round((hash(cx, cy, 35) - 0.5) * 2);
+      this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(y);
+      this.marks.push({ key: type === 'd' ? 'tall_dry' : 'tall', tx: cx, ty: cy, w: 1, h: 1 });
+    }
+
+    const kinds = ['flower_white', 'flower_pink', 'flower_yellow', 'flower_blue'];
+    FLOWERS.forEach(([fx, fy], n) => {
+      for (let k = 0; k < 6; k++) {
+        const a = hash(n, k, 51) * Math.PI * 2, r = hash(n, k, 52) * 2.2 * T;
+        const x = Math.round(fx * T + 8 + Math.cos(a) * r), y = Math.round(fy * T + 8 + Math.sin(a) * r);
+        const cx = Math.floor(x / T), cy = Math.floor(y / T);
+        if (cx < 0 || cy < 0 || cx >= MAP_W || cy >= MAP_H || this.blocked[cy][cx] || region(cx, cy)) continue;
+        if (pathEdge(x, y) < 0.35 || waterAt(x, y) >= 0) continue;
+        this.add.image(x, y, kinds[Math.floor(hash(n, k, 53) * kinds.length)]).setOrigin(0.5, 1).setDepth(y);
+      }
+    });
+  }
+
+  addCharacters() {
+    const from = new URLSearchParams(location.search).get('from');
+    const spawn = from === 'city' ? { x: 23.5, y: 1 } : { x: START.x, y: START.y };
+    this.player = this.add.sprite(spawn.x * T + 8, spawn.y * T + 12, 'player_down_0').setOrigin(0.5, 1);
+  }
+
+  addSparkles() {
+    let made = 0, tries = 0;
+    while (made < 40 && tries++ < 2000) {
+      const x = Math.floor(Math.random() * MAP_W * T), y = Math.floor(Math.random() * MAP_H * T);
+      if (waterAt(x, y) < 0) continue;
+      const s = this.add.image(x, y, 'spark').setDepth(1).setAlpha(0);
+      this.tweens.add({ targets: s, alpha: 0.9, duration: 500 + Math.random() * 900, yoyo: true, repeat: -1, delay: Math.random() * 2000 });
+      made++;
+    }
+  }
+
+  // The minimap's background is drawn once: the baked ground, shrunk, plus a colour block per placed object.
+  buildMinimap() {
+    const c = canvasOf(MAP_W * MINI, MAP_H * MINI), x = c.getContext('2d');
+    x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+    x.drawImage(this.textures.get('ground').getSourceImage(), 0, 0, c.width, c.height);
+    const colors = {
+      tall: '#3a8f33', tall_dry: '#c2ac4e', fence: '#8a5a2b', bush: '#2f8f33', stump_tall: '#7a4d24', stump_short: '#7a4d24',
+      boulder: '#a0a0a8', tree_round: '#3f8f3a', tree_pine: '#1f6a2c', house_a: '#d4472f', house_b: '#d4472f',
+    };
+    const order = Object.keys(colors);
+    this.marks.slice().sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key)).forEach((m) => {
+      x.fillStyle = colors[m.key];
+      const inset = m.key.startsWith('tree') ? 1 : 0;
+      x.fillRect(m.tx * MINI + inset, m.ty * MINI + inset, m.w * MINI - inset * 2, m.h * MINI - inset * 2);
+    });
+    this.miniStatic = c;
+    this.miniCtx = document.getElementById('minimap').getContext('2d');
+  }
+
+  drawMinimap(time) {
+    const x = this.miniCtx, v = this.cameras.main.worldView;
+    x.drawImage(this.miniStatic, 0, 0);
+    x.strokeStyle = 'rgba(255, 255, 255, 0.75)'; x.lineWidth = 1;
+    x.strokeRect(Math.round(v.x / T * MINI) + 0.5, Math.round(v.y / T * MINI) + 0.5, Math.round(v.width / T * MINI), Math.round(v.height / T * MINI));
+    const px = Math.round(this.player.x / T * MINI), py = Math.round((this.player.y - 6) / T * MINI);
+    x.fillStyle = '#111'; x.fillRect(px - 3, py - 3, 6, 6);
+    x.fillStyle = Math.floor(time / 350) % 2 ? '#ff3b30' : '#ffffff'; x.fillRect(px - 2, py - 2, 4, 4);
+  }
+
+  // Player hitbox: 10px wide, 5px tall, at the feet.
+  free(x, y) {
+    return [[-5, 0], [5, 0], [-5, -5], [5, -5]].every(([ox, oy]) => {
+      const cx = Math.floor((x + ox) / T), cy = Math.floor((y + oy) / T);
+      return cx >= 0 && cy >= 0 && cx < MAP_W && cy < MAP_H && !this.blocked[cy][cx];
+    });
+  }
+
+  update(time, delta) {
+    const k = this.keys, p = this.player;
+    const ix = (k.right.isDown || k.d.isDown ? 1 : 0) - (k.left.isDown || k.a.isDown ? 1 : 0);
+    const iy = (k.down.isDown || k.s.isDown ? 1 : 0) - (k.up.isDown || k.w.isDown ? 1 : 0);
+    const moving = ix !== 0 || iy !== 0;
+    const run = k.shift.isDown;
+    if (moving) {
+      const speed = (run ? 110 : 64) * delta / 1000, len = Math.hypot(ix, iy);
+      const dx = ix / len * speed, dy = iy / len * speed;
+      if (this.free(p.x + dx, p.y)) p.x += dx;
+      if (this.free(p.x, p.y + dy)) p.y += dy;
+      this.facing = ix !== 0 ? (ix > 0 ? 'right' : 'left') : (iy < 0 ? 'up' : 'down');
+      this.walkT += delta;
+    } else {
+      this.walkT = 0;
+    }
+    // Two frames per direction: swap them while walking, rest on the first one.
+    const frame = moving ? Math.floor(this.walkT / (run ? 110 : 170)) % 2 : 0;
+    p.setTexture(`player_${this.facing}_${frame}`);
+    p.setDepth(p.y);
+
+    // Walk back up through the north gate -> the city's south gate.
+    const gx = Math.floor(p.x / T);
+    if (!this.leaving && p.y <= T + 2 && gx >= NORTH_GATE[0] && gx <= NORTH_GATE[1]) {
+      this.leaving = true;
+      window.location.href = '/game/city/?from=world';
+    }
+    this.drawMinimap(time);
+  }
+}
+
+window.game = new Phaser.Game({
+  type: Phaser.AUTO,
+  parent: 'game',
+  backgroundColor: '#2f7d2b',
+  pixelArt: true,
+  scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
+  scene: Overworld,
+});
+</script>
+</body>
+</html>
