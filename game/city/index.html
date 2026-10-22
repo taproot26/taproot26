@@ -564,7 +564,8 @@ class City extends Phaser.Scene {
     this.lastTx = x; this.lastTy = y; this.lastTf = f;
     this.lastPing = time;
     this.channel.send({ type: 'broadcast', event: 'move', payload: {
-      id: this.mpId, x, y, facing: f,
+      id: this.mpId, name: this.mpName, char: this.mpChar,
+      x, y, facing: f,
       frame: Math.floor(this.walkT / 170) % 2,
     }});
   }
@@ -592,8 +593,11 @@ class City extends Phaser.Scene {
 
   onGhostMove(d) {
     if (d.id === this.mpId) return;
+    if (!this.ghosts.has(d.id)) {
+      this.onGhostJoin(d);
+      return;
+    }
     const g = this.ghosts.get(d.id);
-    if (!g) return;
     g.tx = d.x; g.ty = d.y; g.seen = performance.now();
     g.sprite.setTexture(`${g.prefix}${d.facing || 'down'}_${d.frame || 0}`);
   }
@@ -622,7 +626,7 @@ class City extends Phaser.Scene {
   updateGhosts() {
     const now = performance.now();
     for (const [key, g] of this.ghosts) {
-      if (now - g.seen > 8000) { this.removeGhost(key); continue; }
+      if (now - g.seen > 15000) { this.removeGhost(key); continue; }
       g.sprite.x += (g.tx - g.sprite.x) * 0.2;
       g.sprite.y += (g.ty - g.sprite.y) * 0.2;
       g.sprite.setDepth(g.sprite.y);
