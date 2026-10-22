@@ -17,11 +17,17 @@
   }
   @media (max-width: 600px) { #minimap { width: 152px; height: 112px; } }
 </style>
+<script>
+if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
+</script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
+<script src="/game/sprite.js"></script>
 </head>
 <body>
 <div id="game"></div>
 <div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/world/">Go to the fields</a><br>Arrow keys / WASD to move, Shift to run</div>
+<div id="mp" style="position:fixed;left:12px;bottom:12px;z-index:3;font:600 12px/1.4 system-ui;color:#fff;background:rgba(0,0,0,0.55);padding:4px 8px;border-radius:4px;pointer-events:none;"></div>
 <canvas id="minimap" width="228" height="168" aria-label="Minimap"></canvas>
 
 <script>
@@ -163,7 +169,7 @@ function makePattern(clean, [sx, sy, sw, sh], inset, pw, ph) {
 const vRoad = [], hRoad = [];                    // first column / row of each 2-wide road
 for (let k = 0; k < NX - 1; k++) vRoad.push(M + PX * k + 16);
 for (let l = 0; l < NY - 1; l++) hRoad.push(M + PY * l + 11);
-const GRASS = 0, ROAD = 1, WALK = 2, STONE = 3;
+const GRASS = 0, ROAD = 1, WALK = 2, STONE = 3, PGROUND = 4;
 const vA = new Int16Array(MAP_W).fill(-1), vS = new Uint8Array(MAP_W), hA = new Int16Array(MAP_H).fill(-1), hS = new Uint8Array(MAP_H);
 vRoad.forEach((a) => { vA[a] = a; vA[a + 1] = a; vS[a - 1] = 1; vS[a + 2] = 1; });
 hRoad.forEach((a) => { hA[a] = a; hA[a + 1] = a; hS[a - 1] = 1; hS[a + 2] = 1; });
@@ -208,16 +214,24 @@ class City extends Phaser.Scene {
     this.load.image('sheet_tiles', '/game/city/assets/tiles.webp');
     this.load.image('sheet_buildings', '/game/city/assets/buildings.webp');
     this.load.image('sheet_player', '/game/world/assets/player.webp');
+    this.load.json('layout', '/game/city/city-layout.json');
+    const FP = '/game/city/assets/fence/';
+    ['straight_back','straight_front','corner_tl','corner_tr','corner_bl','corner_br',
+     'gate_frame_l','gate_frame_r','post_plain'].forEach(k => this.load.image('fraw_'+k, FP+k+'.png'));
   }
 
   create() {
+    this.layout = {};
+    try { this.layout = this.cache.json.get('layout') || {}; } catch (e) {}
     this.blocked = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(false));
     this.marks = [];
     this.tiles = this.buildTextures();
     this.placeCity();
     this.paintGround();
-    const from = new URLSearchParams(location.search).get('from');
+    const qs = new URLSearchParams(location.search);
+    const from = qs.get('from'), sp = qs.get('spawn');
     const spawn = from === 'world' ? { x: 37, y: 53, face: 'up' } : { x: START.x, y: START.y, face: 'down' };
+    if (sp) { const [sx, sy] = sp.split(',').map(Number); spawn.x = sx; spawn.y = sy; }
     this.player = this.add.sprite(spawn.x * T + 16, spawn.y * T + 24, 'player_down_0').setOrigin(0.5, 1);
     this.buildMinimap();
 
@@ -229,9 +243,10 @@ class City extends Phaser.Scene {
     this.scale.on('resize', () => cam.setZoom(zoom()));
 
     const K = Phaser.Input.Keyboard.KeyCodes;
-    this.keys = this.input.keyboard.addKeys({ left: K.LEFT, right: K.RIGHT, up: K.UP, down: K.DOWN, a: K.A, d: K.D, w: K.W, s: K.S, shift: K.SHIFT });
+    this.keys = this.input.keyboard.addKeys({ left: K.LEFT, right: K.RIGHT, up: K.UP, down: K.DOWN, a: K.A, d: K.D, w: K.W, s: K.S, shift: K.SHIFT, space: K.SPACE });
     this.facing = spawn.face;
     this.walkT = 0;
+    this.initMultiplayer();
   }
 
   buildTextures() {
@@ -246,15 +261,56 @@ class City extends Phaser.Scene {
     add('hall', buildings, HALL, 'w', 144);
     SHOPS.forEach((r, i) => add(`shop${i}`, buildings, r, 'w', 144));
     PLOTS.forEach((r, i) => add(`plot${i}`, buildings, r, 'w', 160));
+    // Fence textures from dedicated fence sprites
+    const FW = 96, FH = 56;
+    const fimg = (key) => this.textures.get('fraw_' + key).getSourceImage();
+    const fscale = (key) => shrink(fimg(key), 0, 0, fimg(key).width, fimg(key).height, FW, FH, false);
+    let fc, fctx;
+    // Top fence strip: 5 sections × 96px = 480px
+    fc = canvasOf(BW * T, FH); fctx = fc.getContext('2d');
+    fctx.drawImage(fscale('corner_tl'), 0, 0);
+    fctx.drawImage(fscale('straight_back'), FW, 0);
+    fctx.drawImage(fscale('straight_back'), FW * 2, 0);
+    fctx.drawImage(fscale('straight_back'), FW * 3, 0);
+    fctx.drawImage(fscale('corner_tr'), FW * 4, 0);
+    this.textures.addCanvas('fence_top', fc);
+    // Bottom fence strip: 5 sections, middle = gate opening
+    fc = canvasOf(BW * T, FH); fctx = fc.getContext('2d');
+    fctx.drawImage(fscale('corner_bl'), 0, 0);
+    fctx.drawImage(fscale('straight_front'), FW, 0);
+    fctx.drawImage(fscale('straight_front'), FW * 3, 0);
+    fctx.drawImage(fscale('corner_br'), FW * 4, 0);
+    this.textures.addCanvas('fence_bot', fc);
+    // Gate post: crop one post from the front-view piece to match fence style
+    const sfSrc = fimg('straight_front');
+    const gpSrcW = Math.round(sfSrc.width * 0.3);
+    const gpW = Math.round(gpSrcW * FW / sfSrc.width), gpH = FH;
+    this.textures.addCanvas('fence_gatepost_l', shrink(sfSrc, 0, 0, gpSrcW, sfSrc.height, gpW, gpH, false));
+    this.textures.addCanvas('fence_gatepost_r', shrink(sfSrc, sfSrc.width - gpSrcW, 0, gpSrcW, sfSrc.height, gpW, gpH, false));
+    // Side fence: straight_back section per row (stacked = solid wall)
+    const sbImg = fimg('straight_back');
+    this.textures.addCanvas('fence_side', shrink(sbImg, 0, 0, sbImg.width, sbImg.height, T, T + 8, false));
     Object.entries(PROPS).forEach(([name, [x, y, w, h, mode, size]]) => add(name, tiles, [x, y, w, h], mode, size));
 
-    const f = CHAR_H / 271;
-    PLAYER_SHEET.forEach(([sx, sy, sw, sh], i) => {
-      const tw = Math.round(sw * f), th = Math.round(sh * f);
-      const c = canvasOf(CHAR_W, CHAR_H + 1), x = c.getContext('2d');
-      x.drawImage(shrink(player, sx, sy, sw, sh, tw, th), Math.round((CHAR_W - tw) / 2), CHAR_H + 1 - th);
-      this.textures.addCanvas(`player_${PLAYER_DIRS[i >> 1]}_${i & 1}`, c);
-    });
+    const charData = (() => { try { var d = JSON.parse(localStorage.getItem('taproot_character')); if (d && d.equipment) { var e = d.equipment; if (e.weapon) { e.rhand = e.rhand || e.weapon; delete e.weapon; } if (e.hands) { e.rhand = e.rhand || e.hands; delete e.hands; } } return d; } catch (e) { return null; } })();
+    if (charData && typeof SPRITE !== 'undefined') {
+      const all = SPRITE.renderAll(charData);
+      const cw = Math.round(SPRITE.W * CHAR_H / SPRITE.H);
+      Object.entries(all).forEach(([key, canvas]) => {
+        const c = canvasOf(cw, CHAR_H), x = c.getContext('2d');
+        x.imageSmoothingEnabled = false;
+        x.drawImage(canvas, 0, 0, cw, CHAR_H);
+        this.textures.addCanvas('player_' + key, c);
+      });
+    } else {
+      const f = CHAR_H / 271;
+      PLAYER_SHEET.forEach(([sx, sy, sw, sh], i) => {
+        const tw = Math.round(sw * f), th = Math.round(sh * f);
+        const c = canvasOf(CHAR_W, CHAR_H + 1), x = c.getContext('2d');
+        x.drawImage(shrink(player, sx, sy, sw, sh, tw, th), Math.round((CHAR_W - tw) / 2), CHAR_H + 1 - th);
+        this.textures.addCanvas(`player_${PLAYER_DIRS[i >> 1]}_${i & 1}`, c);
+      });
+    }
 
     return {
       grass: makePattern(tiles, TILE_RECTS.grass, 8, 32, 32),
@@ -274,10 +330,15 @@ class City extends Phaser.Scene {
   }
 
   placeCity() {
+    const blocks = (this.layout && this.layout.blocks) || {};
     for (let by = 0; by < NY; by++) for (let bx = 0; bx < NX; bx++) {
       const x0 = M + PX * bx, y0 = M + PY * by;
+      const bd = blocks[bx + ',' + by];
+      if (bd && bd.type === 'bigplot') { this.placeBigPlot(x0, y0, bd); continue; }
+      const lotOverrides = (bd && bd.lots) || {};
       for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
-        const lx = x0 + 5 * c, ly = y0 + 5 * r, kind = lotKind(bx, by, c, r), id = [bx * 3 + c, by * 2 + r];
+        const lx = x0 + 5 * c, ly = y0 + 5 * r, id = [bx * 3 + c, by * 2 + r];
+        const kind = lotOverrides[c + ',' + r] || lotKind(bx, by, c, r);
         if (kind === 'house') this.put(`house${Math.floor(hash(id[0], id[1], 93) * HOUSES.length)}`, (lx + 2) * T, (ly + 4) * T, 'house', [lx, ly, 4, 4]);
         else if (kind === 'shop') this.put(`shop${Math.floor(hash(id[0], id[1], 94) * SHOPS.length)}`, (lx + 2) * T, (ly + 4) * T, 'shop', [lx, ly, 4, 4]);
         else if (kind === 'hall') this.put('hall', (lx + 2) * T, (ly + 4) * T, 'hall', [lx, ly, 4, 4]);
@@ -298,6 +359,56 @@ class City extends Phaser.Scene {
     this.block(lx, ly + 1, 1, 3); this.block(lx + 4, ly + 1, 1, 3);
     this.block(lx, ly + 3, 2, 1); this.block(lx + 3, ly + 3, 2, 1);
     this.marks.push({ kind: 'plot', rect: [lx, ly + 1, 5, 3] });
+  }
+
+  placeBigPlot(x0, y0, cfg) {
+    cfg = cfg || {};
+    for (let dy = 1; dy < BH - 1; dy++)
+      for (let dx = 1; dx < BW - 1; dx++)
+        TERR[(y0 + dy) * MAP_W + (x0 + dx)] = PGROUND;
+
+    // Top fence strip
+    const topY = (y0 + 1) * T;
+    this.add.image((x0 + BW / 2) * T, topY, 'fence_top').setOrigin(0.5, 1).setDepth(topY);
+    this.block(x0, y0, BW, 1);
+
+    // Bottom fence strip with gate opening (tiles 6-8 open)
+    const botY = (y0 + BH) * T;
+    this.add.image((x0 + BW / 2) * T, botY, 'fence_bot').setOrigin(0.5, 1).setDepth(botY);
+    this.block(x0, y0 + BH - 1, 6, 1);
+    this.block(x0 + 9, y0 + BH - 1, 6, 1);
+    // Gate posts at opening edges
+    this.add.image((x0 + 6) * T, botY, 'fence_gatepost_l').setOrigin(1, 1).setDepth(botY);
+    this.add.image((x0 + 9) * T, botY, 'fence_gatepost_r').setOrigin(0, 1).setDepth(botY);
+
+    // Left fence — individual posts for depth sorting per row
+    for (let dy = 1; dy < BH - 1; dy++) {
+      const py = (y0 + dy + 1) * T;
+      this.add.image((x0 + 0.5) * T, py, 'fence_side').setOrigin(0.5, 1).setDepth(py);
+      this.blocked[y0 + dy][x0] = true;
+    }
+    // Right fence
+    for (let dy = 1; dy < BH - 1; dy++) {
+      const py = (y0 + dy + 1) * T;
+      this.add.image((x0 + BW - 0.5) * T, py, 'fence_side').setOrigin(0.5, 1).setDepth(py);
+      this.blocked[y0 + dy][x0 + BW - 1] = true;
+    }
+
+    // Interior props from layout JSON (fall back to defaults)
+    const props = cfg.props || [];
+    props.forEach((p) => {
+      const key = p.kind + (p.v || 0);
+      if (this.textures.exists(key)) {
+        this.put(key, (x0 + p.dx + 0.5) * T, (y0 + p.dy + 1) * T, 'prop', [x0 + p.dx, y0 + p.dy, 1, 1]);
+      }
+    });
+
+    // Lamps on sidewalk below (skip bench so it doesn't block the gate)
+    const sw = y0 + BH;
+    if (sw < MAP_H && TERR[sw * MAP_W + x0 + 4] === WALK) this.put('lamp0', (x0 + 4.5) * T, (sw + 1) * T - 2, 'prop', [x0 + 4, sw, 1, 1]);
+    if (sw < MAP_H && TERR[sw * MAP_W + x0 + 11] === WALK) this.put('lamp1', (x0 + 11.5) * T, (sw + 1) * T - 2, 'prop', [x0 + 11, sw, 1, 1]);
+
+    this.marks.push({ kind: 'plot', rect: [x0, y0, BW, BH] });
   }
 
   // the spare column beside a building: a bush, small pine or flower bed
@@ -356,6 +467,10 @@ class City extends Phaser.Scene {
         if (t === GRASS) {
           const j = ((y % grass.h) * grass.w + (x % grass.w)) * 4;
           r = grass.data[j]; g = grass.data[j + 1]; b = grass.data[j + 2];
+        } else if (t === PGROUND) {
+          const k = 1 + (hash(x, y, 86) - 0.5) * 0.15 + (hash(x >> 2, y >> 2, 87) - 0.5) * 0.08;
+          r = 135 * k; g = 115 * k; b = 72 * k;
+          if (hash(x >> 1, y >> 1, 88) > 0.75) { g += 18; r -= 10; }
         } else if (t === WALK || t === STONE) {
           const base = t === WALK ? sand : gray, mortar = t === WALK ? mSand : mGray;
           const bw = t === WALK ? 14 : 16, bh = t === WALK ? 8 : 16, row = Math.floor(y / bh), off = t === WALK && row % 2 ? 7 : (t === STONE && row % 2 ? 8 : 0);
@@ -398,6 +513,125 @@ class City extends Phaser.Scene {
     this.miniCtx = document.getElementById('minimap').getContext('2d');
   }
 
+  initMultiplayer() {
+    this.ghosts = new Map();
+    this.lastTrack = 0;
+    this.lastPing = 0;
+    this.mpId = Math.random().toString(36).slice(2, 10);
+    let charData = null;
+    try { charData = JSON.parse(localStorage.getItem('taproot_character')); } catch (e) {}
+    this.mpChar = charData;
+    this.mpName = (charData && charData.name && charData.name.trim()) || '???';
+    this.mpEl = document.getElementById('mp');
+    this.mpLive = false;
+
+    const sb = window.supabase.createClient(
+      'https://azvdqigaqwbeakjieaps.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dmRxaWdhcXdiZWFramllYXBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTE0NjEsImV4cCI6MjA5OTA2NzQ2MX0.QXBpcGKsot8A8w6rq76F6lvGjCVJN0NytDmfmE8C-Dw'
+    );
+    this.channel = sb.channel('city-mp', { config: { broadcast: { self: false } } });
+
+    this.channel
+      .on('broadcast', { event: 'join' }, ({ payload }) => this.onGhostJoin(payload))
+      .on('broadcast', { event: 'move' }, ({ payload }) => this.onGhostMove(payload))
+      .on('broadcast', { event: 'leave' }, ({ payload }) => this.removeGhost(payload.id))
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          this.mpLive = true;
+          const p = this.player;
+          this.channel.send({ type: 'broadcast', event: 'join', payload: {
+            id: this.mpId, name: this.mpName, char: this.mpChar,
+            x: Math.round(p.x), y: Math.round(p.y), facing: this.facing, frame: 0,
+          }});
+        }
+      });
+
+    window.addEventListener('beforeunload', () => {
+      if (this.channel && this.mpLive) {
+        this.channel.send({ type: 'broadcast', event: 'leave', payload: { id: this.mpId } });
+        this.channel.unsubscribe();
+      }
+    });
+  }
+
+  trackPresence(time) {
+    if (!this.mpLive) return;
+    const p = this.player;
+    const x = Math.round(p.x), y = Math.round(p.y), f = this.facing;
+    const moved = x !== this.lastTx || y !== this.lastTy || f !== this.lastTf;
+    const pingDue = time - this.lastPing > 3000;
+    if (!moved && !pingDue) return;
+    this.lastTx = x; this.lastTy = y; this.lastTf = f;
+    this.lastPing = time;
+    this.channel.send({ type: 'broadcast', event: 'move', payload: {
+      id: this.mpId, x, y, facing: f,
+      frame: Math.floor(this.walkT / 170) % 2,
+    }});
+  }
+
+  onGhostJoin(d) {
+    if (d.id === this.mpId) return;
+    const isNew = !this.ghosts.has(d.id);
+    if (!isNew) this.removeGhost(d.id);
+    const prefix = this.buildGhostTextures(d.id, d.char);
+    const texKey = `${prefix}${d.facing || 'down'}_${d.frame || 0}`;
+    const sprite = this.add.sprite(d.x, d.y, texKey).setOrigin(0.5, 1).setAlpha(0.85);
+    const label = this.add.text(d.x, d.y - CHAR_H - 4, d.name || '???', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 1);
+    this.ghosts.set(d.id, { sprite, label, tx: d.x, ty: d.y, prefix, seen: performance.now() });
+    if (isNew) {
+      const p = this.player;
+      this.channel.send({ type: 'broadcast', event: 'join', payload: {
+        id: this.mpId, name: this.mpName, char: this.mpChar,
+        x: Math.round(p.x), y: Math.round(p.y), facing: this.facing, frame: 0,
+      }});
+    }
+  }
+
+  onGhostMove(d) {
+    if (d.id === this.mpId) return;
+    const g = this.ghosts.get(d.id);
+    if (!g) return;
+    g.tx = d.x; g.ty = d.y; g.seen = performance.now();
+    g.sprite.setTexture(`${g.prefix}${d.facing || 'down'}_${d.frame || 0}`);
+  }
+
+  buildGhostTextures(id, charData) {
+    const prefix = 'ghost_' + id + '_';
+    if (this.textures.exists(prefix + 'down_0')) return prefix;
+    if (charData && typeof SPRITE !== 'undefined') {
+      const all = SPRITE.renderAll(charData);
+      const cw = Math.round(SPRITE.W * CHAR_H / SPRITE.H);
+      Object.entries(all).forEach(([key, canvas]) => {
+        const c = canvasOf(cw, CHAR_H), x = c.getContext('2d');
+        x.imageSmoothingEnabled = false;
+        x.drawImage(canvas, 0, 0, cw, CHAR_H);
+        this.textures.addCanvas(prefix + key, c);
+      });
+    }
+    return this.textures.exists(prefix + 'down_0') ? prefix : 'player_';
+  }
+
+  removeGhost(key) {
+    const g = this.ghosts.get(key);
+    if (g) { g.sprite.destroy(); g.label.destroy(); this.ghosts.delete(key); }
+  }
+
+  updateGhosts() {
+    const now = performance.now();
+    for (const [key, g] of this.ghosts) {
+      if (now - g.seen > 8000) { this.removeGhost(key); continue; }
+      g.sprite.x += (g.tx - g.sprite.x) * 0.2;
+      g.sprite.y += (g.ty - g.sprite.y) * 0.2;
+      g.sprite.setDepth(g.sprite.y);
+      g.label.x = g.sprite.x;
+      g.label.y = g.sprite.y - CHAR_H - 4;
+      g.label.setDepth(g.sprite.y + 1);
+    }
+  }
+
   drawMinimap(time) {
     const x = this.miniCtx, v = this.cameras.main.worldView;
     x.drawImage(this.miniStatic, 0, 0);
@@ -406,6 +640,12 @@ class City extends Phaser.Scene {
     const px = Math.round(this.player.x / T * MINI), py = Math.round((this.player.y - 10) / T * MINI);
     x.fillStyle = '#111'; x.fillRect(px - 3, py - 3, 6, 6);
     x.fillStyle = Math.floor(time / 350) % 2 ? '#ff3b30' : '#ffffff'; x.fillRect(px - 2, py - 2, 4, 4);
+    // Other players on minimap
+    x.fillStyle = '#4af';
+    for (const [, g] of this.ghosts) {
+      const gx = Math.round(g.sprite.x / T * MINI), gy = Math.round((g.sprite.y - 10) / T * MINI);
+      x.fillRect(gx - 1, gy - 1, 3, 3);
+    }
   }
 
   // Player hitbox: 14px wide, 8px tall, at the feet.
@@ -420,9 +660,9 @@ class City extends Phaser.Scene {
     const k = this.keys, p = this.player;
     const ix = (k.right.isDown || k.d.isDown ? 1 : 0) - (k.left.isDown || k.a.isDown ? 1 : 0);
     const iy = (k.down.isDown || k.s.isDown ? 1 : 0) - (k.up.isDown || k.w.isDown ? 1 : 0);
-    const moving = ix !== 0 || iy !== 0, run = k.shift.isDown;
+    const moving = ix !== 0 || iy !== 0, sprint = k.space.isDown, run = sprint || k.shift.isDown;
     if (moving) {
-      const speed = (run ? 190 : 112) * delta / 1000, len = Math.hypot(ix, iy);
+      const speed = (sprint ? 340 : run ? 190 : 112) * delta / 1000, len = Math.hypot(ix, iy);
       const dx = ix / len * speed, dy = iy / len * speed;
       if (this.free(p.x + dx, p.y)) p.x += dx;
       if (this.free(p.x, p.y + dy)) p.y += dy;
@@ -434,6 +674,17 @@ class City extends Phaser.Scene {
     const frame = moving ? Math.floor(this.walkT / (run ? 110 : 170)) % 2 : 0;
     p.setTexture(`player_${this.facing}_${frame}`);
     p.setDepth(p.y);
+
+    // Multiplayer: broadcast position + interpolate ghosts
+    if (time - this.lastTrack > 100) {
+      this.lastTrack = time;
+      this.trackPresence(time);
+    }
+    this.updateGhosts();
+    if (this.mpEl) {
+      const n = 1 + this.ghosts.size;
+      this.mpEl.textContent = this.mpLive ? `${this.mpName} | Online: ${n}` : 'MP: connecting...';
+    }
 
     // Walk out the south gate -> the fields.
     const gx = Math.floor(p.x / T);

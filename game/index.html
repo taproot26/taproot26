@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Taproot the Game</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Alegreya+Sans:wght@400;500;700&display=swap">
-
 <style>
   /* Layout: flat plum background. Landing = title + button left, character art right (fades into the bg). Creator = preview stage left, controls right. */
   :root {
@@ -146,22 +145,72 @@
   .list .meta { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
   .list em { color: #8fd694; font-style: normal; font-size: 13px; }
   .list em.down { color: #ff9aa8; }
-  #aSlots li { align-items: center; }
-  .slotname { background: none; border: 0; padding: 0; width: 72px; text-align: left; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
-  .slotname[aria-pressed="true"] { color: var(--accent); }
   #armSaved { color: var(--dim); font-size: 14px; }
-  .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-  .item {
-    display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; text-align: center;
-    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 6px; transition: border-color 0.15s, background 0.15s;
+  .pwr {
+    font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 0.08em;
+    background: linear-gradient(135deg, rgba(212, 169, 79, 0.18), rgba(232, 196, 106, 0.18));
+    border: 1px solid rgba(212, 169, 79, 0.45); border-radius: 4px; padding: 4px 12px;
+    color: var(--accent);
   }
-  .item:hover { border-color: var(--accent); }
-  .item .mini { display: block; width: 80px; }
-  .item b { font-family: var(--display); font-size: 14px; }
-  .item small { color: var(--dim); font-size: 12px; }
-  .item.rare { border-color: rgba(232, 196, 106, 0.5); }
-  .item.rare b { color: #e8c46a; }
-  .item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .slot-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .slot-tab {
+    flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 4px; text-align: center; font-family: var(--display); font-size: 10px;
+    font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+  .tab-ico { display: block; font-size: 16px; line-height: 1; margin-bottom: 2px; }
+  .slot-tab:hover { border-color: var(--accent); color: var(--fg); }
+  .slot-tab[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .slot-tab .eq-dot { display: block; width: 6px; height: 6px; border-radius: 50%; margin: 4px auto 0; background: transparent; }
+  .slot-tab[data-filled] .eq-dot { background: var(--accent); }
+  .traits { display: flex; flex-direction: column; gap: 10px; }
+  .trait { display: flex; align-items: center; gap: 8px; }
+  .trait-lbl { width: 32px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; color: var(--dim); }
+  .trait-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .trait-bar i { display: block; height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .trait-val { min-width: 56px; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .trait-val em { font-style: normal; font-size: 12px; color: #8fd694; }
+  .trait-val em.down { color: #ff9aa8; }
+  .trait[data-stat="hp"] .trait-bar i { background: #8fd694; }
+  .trait[data-stat="atk"] .trait-bar i { background: #f07b7b; }
+  .trait[data-stat="def"] .trait-bar i { background: #7ba8f0; }
+  .trait[data-stat="mag"] .trait-bar i { background: #c07bf0; }
+  .trait[data-stat="spd"] .trait-bar i { background: #7bf0d4; }
+  .icards { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .icard {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 8px 8px; text-align: center;
+    background: rgba(255,255,255,0.04); border: 2px solid var(--line); border-radius: 8px;
+    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  }
+  .icard:hover { transform: translateY(-2px); }
+  .icard .icard-icon { font-size: 32px; line-height: 1; }
+  .icard-name { font-family: var(--display); font-size: 13px; line-height: 1.2; }
+  .icard-rarity {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 3px;
+  }
+  .icard-pwr { font-size: 12px; color: var(--dim); }
+  .icard.common { border-color: rgba(154, 149, 168, 0.3); }
+  .icard.common:hover { border-color: rgba(154, 149, 168, 0.6); }
+  .icard.common .icard-rarity { background: rgba(154, 149, 168, 0.2); color: #9a95a8; }
+  .icard.uncommon { border-color: rgba(143, 214, 148, 0.3); }
+  .icard.uncommon:hover { border-color: rgba(143, 214, 148, 0.6); }
+  .icard.uncommon .icard-name { color: #8fd694; }
+  .icard.uncommon .icard-rarity { background: rgba(143, 214, 148, 0.2); color: #8fd694; }
+  .icard.rare { border-color: rgba(123, 168, 240, 0.4); }
+  .icard.rare:hover { border-color: rgba(123, 168, 240, 0.7); }
+  .icard.rare .icard-name { color: #7ba8f0; }
+  .icard.rare .icard-rarity { background: rgba(123, 168, 240, 0.2); color: #7ba8f0; }
+  .icard.legendary { border-color: rgba(232, 196, 106, 0.5); }
+  .icard.legendary:hover { border-color: rgba(232, 196, 106, 0.8); }
+  .icard.legendary .icard-name { color: #e8c46a; }
+  .icard.legendary .icard-rarity { background: rgba(232, 196, 106, 0.25); color: #e8c46a; }
+  .icard[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 12px rgba(212, 169, 79, 0.2); }
+  .icard.unequip { border-style: dashed; }
+  .icard.unequip:hover { border-color: var(--dim); transform: translateY(-2px); }
+  .arm-footer { display: flex; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 
   @media (max-width: 780px) {
     .grid, .home-grid { grid-template-columns: minmax(0, 1fr); }
@@ -253,8 +302,15 @@
         </section>
       </div>
       <div class="main">
+        <section class="panel" aria-label="Explore">
+          <h3 class="h">Explore</h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+            <a class="btn" href="/game/city/">Enter City</a>
+            <a class="btn ghost" href="/game/world/">Explore Fields</a>
+          </div>
+        </section>
         <section class="panel" aria-label="Map">
-          <div class="maphead"><h3 class="h">The City</h3><span class="sub">Map coming soon</span></div>
+          <div class="maphead"><h3 class="h">The City</h3></div>
           <div class="map" id="map"></div>
         </section>
         <section class="panel" aria-label="Quests">
@@ -271,6 +327,7 @@
     <div class="top">
       <h2>Armory</h2>
       <div class="who">
+        <span class="pwr" id="aPwr">PWR 0</span>
         <span id="armSaved" role="status"></span>
         <button class="btn ghost" id="armBack" type="button">Back</button>
       </div>
@@ -282,19 +339,17 @@
           <h3 id="aName"></h3>
           <p class="sub" id="aClass"></p>
         </section>
-        <section class="panel" aria-label="Stats">
-          <h3 class="h">Stats</h3>
-          <ul class="list" id="aStats"></ul>
+        <section class="panel" aria-label="Traits">
+          <h3 class="h">Traits</h3>
+          <div id="aStats" class="traits"></div>
         </section>
       </div>
       <div class="main">
-        <section class="panel" aria-label="Equipped">
-          <h3 class="h">Equipped</h3>
-          <ul class="list" id="aSlots"></ul>
-        </section>
-        <section class="panel" aria-label="Inventory">
-          <h3 class="h" id="aItemsTitle">Inventory</h3>
-          <div class="items" id="aItems"></div>
+        <section class="panel" aria-label="Equipment">
+          <h3 class="h" id="aSlotTitle">Select Head Item</h3>
+          <div class="slot-tabs" id="aSlotTabs"></div>
+          <div class="icards" id="aItems"></div>
+          <div class="arm-footer"></div>
         </section>
       </div>
     </div>
@@ -307,7 +362,7 @@
   const CLASSES = [['knight', 'Knight'], ['mage', 'Mage'], ['ranger', 'Ranger'], ['rogue', 'Rogue']];
   const { SKINS, HAIRS } = SPRITE;
   const STYLES = [['short', 'Short'], ['long', 'Long'], ['bald', 'Bald']];
-  const { ITEMS, SLOTS, STAT_KEYS, STAT_LABELS, BASE, defaultEquipment, computeStats } = GAME;
+  const { ITEMS, SLOTS, STAT_KEYS, STAT_LABELS, SLOT_LABELS, SLOT_ICONS, BASE, RARITIES, RARITY_ORDER, defaultEquipment, migrateEquipment, computeStats, computePower } = GAME;
   const sprite = SPRITE.html;
 
   const S = { name: 'Aldric', cls: 'knight', skin: 1, hs: 'short', hc: 1, equipment: defaultEquipment('knight') };
@@ -397,12 +452,18 @@
 
   function enterGame(user) {
     player.username = user.username;
-    player.inventory = user.inventory || [];
+    const allItems = Object.keys(ITEMS);
+    const inv = user.inventory || [];
+    const missing = allItems.filter((id) => inv.indexOf(id) === -1);
+    player.inventory = missing.length ? inv.concat(missing) : inv;
     player.hasChar = !!user.character;
     $('who').textContent = user.username;
     if (user.character) {
       Object.assign(S, user.character);
-      S.equipment = { ...(user.character.equipment || defaultEquipment(user.character.cls)) };
+      var localEq = null;
+      try { var lc = JSON.parse(localStorage.getItem('taproot_character')); if (lc && lc.equipment) localEq = lc.equipment; } catch (e) {}
+      S.equipment = migrateEquipment({ ...(localEq || user.character.equipment || defaultEquipment(user.character.cls)) });
+      try { localStorage.setItem('taproot_character', JSON.stringify(S)); } catch (e) {}
       $('name').value = S.name;
       update();
       renderHome();
@@ -454,6 +515,7 @@
     try {
       await api('save', { character: S });
       player.hasChar = true;
+      try { localStorage.setItem('taproot_character', JSON.stringify(S)); } catch (e) {}
       renderHome();
       show('home');
     } catch (err) { $('saveMsg').textContent = err.status === 401 ? 'Session expired, sign in again' : err.message; }
@@ -461,64 +523,81 @@
   ['logout', 'logout2'].forEach((id) => $(id).addEventListener('click', async () => {
     await api('logout').catch(() => {});
     setKey(null);
+    try { localStorage.removeItem('taproot_character'); } catch (e) {}
     show('landing');
   }));
   $('edit').addEventListener('click', () => show('creator'));
   $('back').addEventListener('click', () => show(player.hasChar ? 'home' : 'landing'));
 
   let armTab = 'head';
-  const SLOT_NAMES = { head: 'Head', body: 'Body', weapon: 'Weapon' };
-  const chips = (st) => Object.entries(st).map(([k, v]) => `${STAT_LABELS[k]} ${v > 0 ? '+' : ''}${v}`).join(' · ');
+  let armDirty = false;
+  const STAT_MAX = { hp: 250, atk: 30, def: 30, mag: 30, spd: 20 };
 
   function renderArmory() {
     const eq = S.equipment;
     $('aSprite').innerHTML = sprite(S);
     $('aName').textContent = S.name.trim() || player.username;
     $('aClass').textContent = CLASSES.find(([k]) => k === S.cls)[1];
+    $('aPwr').textContent = 'PWR ' + computePower(S.cls, eq);
 
     const total = computeStats(S.cls, eq);
     $('aStats').innerHTML = STAT_KEYS.map((k) => {
       const bonus = total[k] - BASE[S.cls][k];
-      const tag = bonus ? ` <em class="${bonus > 0 ? 'up' : 'down'}">${bonus > 0 ? '+' : ''}${bonus}</em>` : '';
-      return `<li><span>${STAT_LABELS[k]}</span><span class="meta">${total[k]}${tag}</span></li>`;
+      const pct = Math.min(100, Math.round(total[k] / STAT_MAX[k] * 100));
+      const bHtml = bonus ? ` <em class="${bonus < 0 ? 'down' : ''}">${bonus > 0 ? '+' : ''}${bonus}</em>` : '';
+      return `<div class="trait" data-stat="${k}"><span class="trait-lbl">${STAT_LABELS[k]}</span><div class="trait-bar"><i style="width:${pct}%"></i></div><span class="trait-val">${total[k]}${bHtml}</span></div>`;
     }).join('');
 
-    $('aSlots').innerHTML = SLOTS.map((slot) => {
-      const it = eq[slot] ? ITEMS[eq[slot]] : null;
-      return `<li><button type="button" class="slotname" data-tab="${slot}" aria-pressed="${armTab === slot}">${SLOT_NAMES[slot]}</button>`
-        + `<span class="${it ? '' : 'meta'}">${it ? it.name : 'Empty'}</span>`
-        + (it ? `<button type="button" class="linkbtn" data-unequip="${slot}">Unequip</button>` : '<span></span>') + '</li>';
-    }).join('');
+    $('aSlotTabs').innerHTML = SLOTS.map((slot) =>
+      `<button type="button" class="slot-tab" data-tab="${slot}" aria-pressed="${armTab === slot}"${eq[slot] ? ' data-filled' : ''}><span class="tab-ico">${SLOT_ICONS[slot]}</span>${SLOT_LABELS[slot]}<span class="eq-dot"></span></button>`
+    ).join('');
+    $('aSlotTitle').textContent = 'Select ' + SLOT_LABELS[armTab] + ' Item';
 
-    $('aItemsTitle').textContent = SLOT_NAMES[armTab] + ' items';
     const owned = player.inventory.filter((id) => ITEMS[id] && ITEMS[id].slot === armTab);
+    owned.sort((a, b) => RARITY_ORDER.indexOf(ITEMS[a].rarity) - RARITY_ORDER.indexOf(ITEMS[b].rarity));
+    const ipwr = (it) => { let p = RARITIES[it.rarity].power; STAT_KEYS.forEach((k) => { p += it.stats[k] || 0; }); return p; };
+
     $('aItems').innerHTML = owned.map((id) => {
       const it = ITEMS[id];
-      return `<button type="button" class="item ${it.rarity}" data-equip="${id}" aria-pressed="${eq[armTab] === id}">`
-        + `<span class="mini">${sprite({ ...S, equipment: { ...eq, [armTab]: id } })}</span><b>${it.name}</b><small>${chips(it.stats)}</small></button>`;
-    }).join('') || '<p class="sub">Nothing here yet.</p>';
+      return `<button type="button" class="icard ${it.rarity}" data-equip="${id}" aria-pressed="${eq[armTab] === id}">`
+        + `<span class="icard-icon">${SLOT_ICONS[armTab]}</span>`
+        + `<b class="icard-name">${it.name}</b>`
+        + `<span class="icard-rarity">${RARITIES[it.rarity].label}</span>`
+        + `<span class="icard-pwr">PWR +${ipwr(it)}</span></button>`;
+    }).join('')
+    + `<button type="button" class="icard unequip" data-equip="" aria-pressed="${!eq[armTab]}">`
+    + `<span class="icard-icon" style="opacity:0.3">❌</span>`
+    + `<b class="icard-name">No Item</b><span class="icard-rarity" style="background:transparent;color:var(--dim)">Unequip</span>`
+    + `<span class="icard-pwr">PWR +0</span></button>`;
   }
 
   let saveQueue = Promise.resolve();
-  function persist() {
+  function persistArmory() {
+    try { localStorage.setItem('taproot_character', JSON.stringify(S)); } catch (e) {}
     $('armSaved').textContent = 'Saving...';
     saveQueue = saveQueue
       .then(() => api('save', { character: S }))
-      .then(() => { $('armSaved').textContent = 'Saved'; })
-      .catch((err) => { $('armSaved').textContent = err.status === 401 ? 'Session expired, sign in again' : err.message; });
+      .then(() => { $('armSaved').textContent = 'Saved'; armDirty = false; })
+      .catch((err) => { $('armSaved').textContent = err.status === 401 ? 'Session expired' : err.message; });
   }
 
   $('armory').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-tab], [data-unequip], [data-equip]');
+    const t = e.target.closest('[data-tab], [data-equip]');
     if (!t) return;
-    if (t.dataset.tab) armTab = t.dataset.tab;
-    else if (t.dataset.unequip) S.equipment[t.dataset.unequip] = null;
-    else S.equipment[armTab] = S.equipment[armTab] === t.dataset.equip ? null : t.dataset.equip;
-    renderArmory();
-    if (!t.dataset.tab) persist();
+    if ('tab' in t.dataset) { armTab = t.dataset.tab; renderArmory(); return; }
+    if ('equip' in t.dataset) {
+      const id = t.dataset.equip;
+      S.equipment[armTab] = (id && S.equipment[armTab] !== id) ? id : null;
+      armDirty = true;
+      try { localStorage.setItem('taproot_character', JSON.stringify(S)); } catch (e) {}
+      renderArmory();
+    }
   });
-  $('armoryBtn').addEventListener('click', () => { $('armSaved').textContent = ''; renderArmory(); show('armory'); });
-  $('armBack').addEventListener('click', () => { renderHome(); update(); show('home'); });
+  $('armoryBtn').addEventListener('click', () => { armDirty = false; $('armSaved').textContent = ''; renderArmory(); show('armory'); });
+  $('armBack').addEventListener('click', () => {
+    if (armDirty) persistArmory();
+    renderHome(); update(); show('home');
+  });
 
   buildHome();
   update();

@@ -1,0 +1,9 @@
+node_modules
+.claude
+.git
+supabase
+tools
+tests
+*.command
+game-local-db.json
+.env.local

@@ -17,7 +17,11 @@
   }
   @media (max-width: 600px) { #minimap { width: 128px; height: 96px; } }
 </style>
+<script>
+if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
+</script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script src="/game/sprite.js"></script>
 </head>
 <body>
 <div id="game"></div>
@@ -205,15 +209,26 @@ function buildTextures(scene) {
     scene.textures.addCanvas(name, shrink(objects, sx, sy, sw, sh, tw, th));
   });
 
-  // 8 poses: 2 frames per direction, feet on the bottom edge, centred horizontally.
-  const f = CHAR_H / 271;
-  PLAYER_SHEET.forEach(([sx, sy, sw, sh], i) => {
-    const tw = Math.round(sw * f), th = Math.round(sh * f);
-    const c = canvasOf(CHAR_W, CHAR_H + 1), x = c.getContext('2d');
-    x.drawImage(shrink(player, sx, sy, sw, sh, tw, th), Math.round((CHAR_W - tw) / 2), CHAR_H + 1 - th);
-    const dir = PLAYER_DIRS[i >> 1], n = i & 1;
-    scene.textures.addCanvas(`player_${dir}_${n}`, c);
-  });
+  const charData = (() => { try { var d = JSON.parse(localStorage.getItem('taproot_character')); if (d && d.equipment) { var e = d.equipment; if (e.weapon) { e.rhand = e.rhand || e.weapon; delete e.weapon; } if (e.hands) { e.rhand = e.rhand || e.hands; delete e.hands; } } return d; } catch (e) { return null; } })();
+  if (charData && typeof SPRITE !== 'undefined') {
+    const all = SPRITE.renderAll(charData);
+    const cw = Math.round(SPRITE.W * CHAR_H / SPRITE.H);
+    Object.entries(all).forEach(([key, canvas]) => {
+      const c = canvasOf(cw, CHAR_H), x = c.getContext('2d');
+      x.imageSmoothingEnabled = false;
+      x.drawImage(canvas, 0, 0, cw, CHAR_H);
+      scene.textures.addCanvas('player_' + key, c);
+    });
+  } else {
+    const f = CHAR_H / 271;
+    PLAYER_SHEET.forEach(([sx, sy, sw, sh], i) => {
+      const tw = Math.round(sw * f), th = Math.round(sh * f);
+      const c = canvasOf(CHAR_W, CHAR_H + 1), x = c.getContext('2d');
+      x.drawImage(shrink(player, sx, sy, sw, sh, tw, th), Math.round((CHAR_W - tw) / 2), CHAR_H + 1 - th);
+      const dir = PLAYER_DIRS[i >> 1], n = i & 1;
+      scene.textures.addCanvas(`player_${dir}_${n}`, c);
+    });
+  }
 
   scene.textures.addCanvas('spark', (() => { const c = canvasOf(2, 2); c.getContext('2d').fillStyle = '#fff'; c.getContext('2d').fillRect(0, 0, 2, 2); return c; })());
 

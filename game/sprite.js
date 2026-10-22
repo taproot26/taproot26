@@ -159,13 +159,56 @@
     },
   };
 
+  /* ---------- eyewear ---------- */
+  const EYEWEAR = {
+    round_specs(d) {
+      d.fill(14, 13, 17, 16, 'lens'); d.fill(22, 13, 25, 16, 'lens');
+      d.fill(15, 14, 16, 15, 'lensIn'); d.fill(23, 14, 24, 15, 'lensIn');
+      d.fill(18, 14, 21, 14, 'lensBridge');
+      d.px(13, 14, 'lensBridge'); d.px(26, 14, 'lensBridge');
+    },
+  };
+
+  /* ---------- left hand ---------- */
+  const LHANDS = {
+    wooden_shield(d) {
+      d.fill(7, 28, 9, 28, 'shield');
+      d.fill(6, 29, 10, 32, 'shield');
+      d.fill(7, 33, 9, 33, 'shield');
+      d.fill(7, 29, 8, 30, 'shieldHi');
+      d.px(8, 31, 'shieldBoss');
+    },
+  };
+
+  /* ---------- feet overlays ---------- */
+  const FEET_VIS = {
+    winged_boots(d) {
+      d.fill(9, 40, 10, 40, 'wing'); d.fill(8, 41, 9, 41, 'wing'); d.fill(9, 42, 11, 42, 'wing'); d.fill(8, 43, 9, 43, 'wing');
+      d.px(9, 40, 'wingHi'); d.px(10, 40, 'wingHi');
+      d.fill(29, 40, 30, 40, 'wing'); d.fill(30, 41, 31, 41, 'wing'); d.fill(28, 42, 30, 42, 'wing'); d.fill(30, 43, 31, 43, 'wing');
+      d.px(29, 40, 'wingHi'); d.px(30, 40, 'wingHi');
+    },
+  };
+
+  /* ---------- pets ---------- */
+  const PETS = {
+    baby_slime(d) {
+      d.fill(34, 40, 35, 40, 'slime');
+      d.fill(33, 41, 36, 41, 'slime');
+      d.fill(32, 42, 37, 43, 'slime');
+      d.fill(33, 44, 36, 44, 'slime');
+      d.px(33, 41, 'slimeHi'); d.px(34, 41, 'slimeHi');
+      d.px(34, 42, 'slimeEye'); d.px(36, 42, 'slimeEye');
+    },
+  };
+
   /* ---------- materials ---------- */
   const CAST = new Set(['hair', 'helm', 'helmDark', 'hat', 'hatBand', 'brim', 'hood', 'hoodIn', 'crown']);
 
   function materials(o, f, eq) {
     const skin = SKINS[o.skin] || SKINS[1], hc = HAIRS[o.hc] || HAIRS[0];
     const rogue = eq.head === 'rogue_hood';
-    const blade = { ember_blade: ['#ff5a2e', '#ffd36e'], shadow_dagger: ['#8d93c4', '#dfe3ff'] }[eq.weapon] || ['#c3ccd8', '#f4f8fc'];
+    const blade = { ember_blade: ['#ff5a2e', '#ffd36e'], shadow_dagger: ['#8d93c4', '#dfe3ff'] }[eq.rhand] || ['#c3ccd8', '#f4f8fc'];
     return {
       skin: { c: skin }, ear: { c: skin }, skinArm: { c: skin }, hand: { c: f.gloves || skin },
       neck: { c: dark(skin), flat: true },
@@ -188,11 +231,19 @@
       crown: { c: '#e0b450' }, gem: { c: '#e0302a', flat: true, base: 'crown' }, gem2: { c: '#3a7bd5', flat: true, base: 'crown' },
 
       blade: { c: blade[0] }, bladeHi: { c: blade[1], flat: true, base: 'blade' },
-      guard: { c: eq.weapon === 'shadow_dagger' ? '#3c3646' : '#d9b04f' }, grip: { c: '#5a3a22' },
+      guard: { c: eq.rhand === 'shadow_dagger' ? '#3c3646' : '#d9b04f' }, grip: { c: '#5a3a22' },
       staff: { c: '#7a5230' }, orb: { c: '#4fc3ff' }, orbHi: { c: '#e8fbff', flat: true, base: 'orb' },
       bow: { c: '#8b5e3c' }, string: { c: '#efe6cf', flat: true, noLine: true },
       quiver: { c: '#7a5230' }, fletch: { c: '#eae4d6' },
-      spark: { c: eq.weapon === 'oak_staff' ? '#9fe6ff' : '#ffc46a', flat: true, noLine: true, a: 0.85 },
+      spark: { c: eq.rhand === 'oak_staff' ? '#9fe6ff' : '#ffc46a', flat: true, noLine: true, a: 0.85 },
+
+      lens: { c: '#1a1422' }, lensIn: { c: '#2a3a5a', flat: true, base: 'lens' },
+      lensBridge: { c: '#a0a8b4', flat: true, base: 'skin' },
+      shield: { c: '#8b6b3e' }, shieldHi: { c: '#c9a664', flat: true, base: 'shield' },
+      shieldBoss: { c: '#a0a8b4', flat: true, base: 'shield' },
+      slime: { c: '#5ec45e' }, slimeHi: { c: '#a0e8a0', flat: true, base: 'slime' },
+      slimeEye: { c: '#1a1422', flat: true, base: 'slime' },
+      wing: { c: '#f0e8d8' }, wingHi: { c: '#ffffff', flat: true, base: 'wing' },
     };
   }
 
@@ -209,16 +260,20 @@
     };
     const eq = o.equipment || {};
     const f = OUTFITS[eq.body] || OUTFITS.bare;
-    const weapon = WEAPONS[eq.weapon];
+    const weapon = WEAPONS[eq.rhand];
 
     if (o.hs === 'long') fill(10, 12, 29, 31, 'hairBack');
-    if (eq.weapon === 'hunter_bow') { fill(7, 20, 9, 31, 'quiver'); fill(7, 17, 9, 19, 'fletch'); px(8, 16, 'fletch'); }
+    if (eq.rhand === 'hunter_bow') { fill(7, 20, 9, 31, 'quiver'); fill(7, 17, 9, 19, 'fletch'); px(8, 16, 'fletch'); }
     body(d, f);
+    if (LHANDS[eq.lhand]) LHANDS[eq.lhand](d);
+    if (FEET_VIS[eq.feet]) FEET_VIS[eq.feet](d);
     face(d, o);
+    if (EYEWEAR[eq.eyes]) EYEWEAR[eq.eyes](d);
     hair(d, o, eq.head && eq.head !== 'gold_crown' && !!HEADS[eq.head]);
     if (HEADS[eq.head]) HEADS[eq.head](d);
     if (weapon) { weapon(d); fill(28, 34, 31, 36, 'hand'); }
     else { fill(27, 34, 29, 35, 'hand'); fill(27, 36, 28, 36, 'hand'); }
+    if (PETS[eq.pet]) PETS[eq.pet](d);
     return { g, M: materials(o, f, eq) };
   }
 
@@ -260,10 +315,221 @@
   const cache = new Map();
   function html(o) {
     const eq = o.equipment || {};
-    const key = [o.skin, o.hc, o.hs, eq.head, eq.body, eq.weapon].join('|');
+    const key = [o.skin, o.hc, o.hs, eq.head, eq.eyes, eq.body, eq.rhand, eq.lhand, eq.feet, eq.pet].join('|');
     if (!cache.has(key)) cache.set(key, render(o).toDataURL());
     return `<img class="sprite" src="${cache.get(key)}" width="${W}" height="${H}" alt="" draggable="false">`;
   }
 
-  root.SPRITE = { W, H, SKINS, HAIRS, render, html };
+  // --- Direction + walk-frame rendering for map sprites ---
+
+  function paintDir(o, dir, frame) {
+    if (dir === 'right') {
+      var r = paintDir(o, 'left', frame);
+      var fg = new Array(W * H).fill(null);
+      for (var yy = 0; yy < H; yy++) for (var xx = 0; xx < W; xx++) fg[yy * W + (W - 1 - xx)] = r.g[yy * W + xx];
+      return { g: fg, M: r.M };
+    }
+    if (dir === 'down' && frame === 0) return paint(o);
+
+    var g = new Array(W * H).fill(null);
+    var px = function (x, y, m) { if (x >= 0 && y >= 0 && x < W && y < H) g[y * W + x] = m; };
+    var fill = function (x0, y0, x1, y1, m) { for (var yy = y0; yy <= y1; yy++) for (var xx = x0; xx <= x1; xx++) px(xx, yy, m); };
+    var span = function (y, a, b, m) { fill(a, y, b, y, m); };
+    var d = {
+      px: px, fill: fill, span: span,
+      rows: function (y0, list, m) { list.forEach(function (s, i) { (Array.isArray(s[0]) ? s : [s]).forEach(function (ab) { span(y0 + i, ab[0], ab[1], m); }); }); },
+      sym: function (x0, y0, x1, y1, m) { fill(x0, y0, x1, y1, m); fill(W - 1 - x1, y0, W - 1 - x0, y1, m); },
+    };
+
+    var eq = o.equipment || {};
+    var f = OUTFITS[eq.body] || OUTFITS.bare;
+    var weapon = WEAPONS[eq.rhand];
+    var capped = eq.head && eq.head !== 'gold_crown' && !!HEADS[eq.head];
+
+    if (dir === 'left') {
+      paintLeftView(d, o, f, eq, frame, capped);
+      return { g: g, M: materials(o, f, eq) };
+    }
+
+    // Down frame 1 or Up — shared torso + arms
+    if (o.hs === 'long') fill(10, 12, 29, 31, 'hairBack');
+    if (eq.rhand === 'hunter_bow') { fill(7, 20, 9, 31, 'quiver'); fill(7, 17, 9, 19, 'fletch'); px(8, 16, 'fletch'); }
+
+    if (!f.robe) {
+      var top = f.bootTop || 43;
+      fill(13, 35, 26, 36, 'pants');
+      if (frame === 0) {
+        fill(13, 37, 18, top - 1, 'pants'); fill(21, 37, 26, top - 1, 'pants');
+        fill(13, top, 18, 44, 'boot'); fill(12, 45, 18, 45, 'boot');
+        fill(21, top, 26, 44, 'boot'); fill(21, 45, 27, 45, 'boot');
+      } else {
+        fill(13, 38, 18, Math.min(top, 44), 'pants');
+        fill(13, Math.min(top + 1, 45), 18, 45, 'boot'); fill(12, 46, 18, 46, 'boot');
+        fill(21, 36, 26, Math.max(top - 2, 36), 'pants');
+        fill(21, Math.max(top - 1, 37), 26, 43, 'boot'); fill(21, 44, 27, 44, 'boot');
+      }
+    }
+
+    d.span(23, 14, 25, 'body'); fill(13, 24, 26, 34, 'body');
+    d.sym(11, 24, 12, 24, 'arm');
+    if (f.sleeves === 'wide') { d.sym(10, 25, 12, 30, 'arm'); d.sym(9, 31, 13, 33, 'arm'); }
+    else d.sym(10, 25, 12, f.sleeves === 'short' ? 27 : 33, 'arm');
+    if (f.sleeves === 'short') d.sym(10, 28, 12, 33, 'skinArm');
+    if (f.bracer) d.sym(10, 31, 12, 33, 'bracer');
+    fill(10, 34, 12, 35, 'hand'); fill(11, 36, 12, 36, 'hand');
+    if (f.belt) { fill(13, 33, 26, 34, 'belt'); if (f.buckle) fill(19, 33, 20, 34, 'buckle'); }
+    fill(17, 22, 22, 22, 'neck');
+    EXTRAS[f.extra](d);
+    if (LHANDS[eq.lhand]) LHANDS[eq.lhand](d);
+    if (FEET_VIS[eq.feet]) FEET_VIS[eq.feet](d);
+
+    if (dir === 'up') {
+      d.rows(7, [[15, 24], [14, 25]], 'skin'); fill(13, 9, 26, 18, 'skin');
+      d.rows(19, [[14, 25], [15, 24], [16, 23]], 'skin');
+      if (o.hs === 'bald') {
+        d.rows(4, [[16, 23], [14, 25], [13, 26], [13, 26], [13, 26]], 'skin');
+      } else {
+        fill(13, 7, 26, 20, 'hair');
+        d.rows(1, [[[17, 18], [23, 24]], [[13, 14], [16, 19], [22, 25]], [[11, 27]], [[10, 29]], [[9, 30]]], 'hair');
+        fill(8, 6, 31, 10, 'hair');
+        d.sym(8, 11, 13, 16, 'hair');
+        d.sym(7, 6, 7, 9, 'hair'); px(6, 8, 'hair'); px(33, 7, 'hair'); px(10, 2, 'hair');
+        [[16, 9], [20, 7], [24, 9], [18, 14], [22, 13]].forEach(function (p) { px(p[0], p[1], 'hairDk'); });
+        d.rows(5, [[21, 22]], 'hairHi'); d.rows(4, [[13, 16]], 'hairHi');
+      }
+      if (o.hs === 'long') {
+        d.sym(10, 12, 12, 28, 'hair'); d.sym(13, 12, 13, 15, 'hair');
+        d.sym(11, 29, 12, 29, 'hair'); d.sym(11, 17, 11, 20, 'hairDk');
+      }
+      if (HEADS[eq.head]) HEADS[eq.head](d);
+    } else {
+      face(d, o);
+      if (EYEWEAR[eq.eyes]) EYEWEAR[eq.eyes](d);
+      hair(d, o, capped);
+      if (HEADS[eq.head]) HEADS[eq.head](d);
+    }
+
+    if (weapon) { weapon(d); fill(28, 34, 31, 36, 'hand'); }
+    else { fill(27, 34, 29, 35, 'hand'); fill(27, 36, 28, 36, 'hand'); }
+    if (PETS[eq.pet]) PETS[eq.pet](d);
+
+    return { g: g, M: materials(o, f, eq) };
+  }
+
+  function paintLeftView(d, o, f, eq, frame, capped) {
+    if (!f.robe) {
+      var top = f.bootTop || 43;
+      d.fill(14, 35, 24, 36, 'pants');
+      if (frame === 0) {
+        d.fill(14, 37, 18, top - 1, 'pants'); d.fill(20, 37, 24, top - 1, 'pants');
+        d.fill(14, top, 18, 44, 'boot'); d.fill(13, 45, 18, 45, 'boot');
+        d.fill(20, top, 24, 44, 'boot'); d.fill(20, 45, 25, 45, 'boot');
+      } else {
+        d.fill(12, 37, 16, Math.min(top, 44), 'pants');
+        d.fill(12, Math.min(top + 1, 45), 16, 45, 'boot'); d.fill(11, 46, 16, 46, 'boot');
+        d.fill(22, 36, 26, Math.max(top - 2, 36), 'pants');
+        d.fill(22, Math.max(top - 1, 37), 26, 43, 'boot'); d.fill(22, 44, 27, 44, 'boot');
+      }
+    }
+    d.span(23, 15, 24, 'body'); d.fill(13, 24, 25, 34, 'body');
+    d.fill(10, 24, 12, 24, 'arm');
+    if (f.sleeves === 'wide') { d.fill(9, 25, 12, 30, 'arm'); d.fill(8, 31, 12, 33, 'arm'); }
+    else d.fill(9, 25, 12, f.sleeves === 'short' ? 27 : 33, 'arm');
+    if (f.sleeves === 'short') d.fill(9, 28, 12, 33, 'skinArm');
+    if (f.bracer) d.fill(9, 31, 12, 33, 'bracer');
+    d.fill(9, 34, 11, 35, 'hand'); d.fill(10, 36, 11, 36, 'hand');
+    if (f.belt) { d.fill(13, 33, 25, 34, 'belt'); if (f.buckle) d.fill(18, 33, 19, 34, 'buckle'); }
+    d.fill(16, 22, 21, 22, 'neck');
+    if (f.extra === 'tee') { d.fill(11, 23, 12, 23, 'skinArm'); }
+    else if (f.extra === 'knight') {
+      d.fill(13, 35, 25, 36, 'mail');
+      d.fill(16, 25, 22, 36, 'tabard'); d.fill(18, 28, 19, 29, 'emblem');
+      d.fill(8, 23, 12, 23, 'pauldron'); d.fill(7, 24, 12, 26, 'pauldron');
+    } else if (f.extra === 'robe') {
+      d.fill(13, 35, 25, 37, 'body'); d.fill(12, 38, 26, 40, 'body'); d.fill(11, 41, 27, 44, 'body');
+      d.fill(18, 24, 19, 43, 'trim'); d.fill(11, 44, 27, 44, 'trim');
+      d.fill(14, 45, 17, 45, 'boot'); d.fill(21, 45, 24, 45, 'boot');
+    } else if (f.extra === 'ranger') {
+      d.fill(13, 35, 25, 36, 'body');
+      for (var i = 0; i < 10; i++) { var y = 24 + Math.floor(i * 0.75); d.px(14 + i, y, 'strap'); }
+    } else if (f.extra === 'rogue') {
+      d.fill(14, 22, 23, 24, 'scarf'); d.fill(13, 25, 14, 29, 'scarf');
+      d.fill(22, 35, 24, 37, 'pouch');
+    }
+
+    d.rows(7, [[13, 23], [12, 24]], 'skin');
+    d.fill(11, 9, 25, 18, 'skin');
+    d.rows(19, [[12, 24], [13, 23], [14, 22]], 'skin');
+    d.fill(10, 14, 10, 16, 'ear');
+    d.fill(13, 14, 14, 16, 'eye'); d.px(14, 14, 'eyeHi');
+    d.fill(15, 19, 16, 19, 'mouth');
+    d.px(12, 17, 'blush');
+
+    if (o.hs !== 'bald') {
+      if (!capped) {
+        d.rows(1, [[[16, 17], [22, 23]], [[15, 18], [21, 25]], [[14, 28]], [[13, 29]], [[12, 30]]], 'hair');
+        d.fill(11, 6, 31, 10, 'hair');
+        d.fill(25, 11, 31, 15, 'hair'); d.fill(26, 16, 30, 17, 'hair'); d.fill(27, 18, 29, 18, 'hair');
+        d.fill(11, 11, 14, 13, 'hair');
+        d.px(7, 8, 'hair'); d.px(33, 7, 'hair'); d.px(10, 2, 'hair');
+        [[14, 7], [20, 5], [26, 8]].forEach(function (p) { d.px(p[0], p[1], 'hairDk'); });
+        d.rows(5, [[21, 22]], 'hairHi'); d.rows(4, [[12, 14]], 'hairHi');
+      }
+      if (o.hs === 'long') {
+        d.fill(25, 12, 28, 28, 'hair'); d.fill(26, 29, 28, 29, 'hair');
+        d.fill(26, 17, 26, 20, 'hairDk');
+      }
+    } else if (!capped) {
+      d.rows(4, [[14, 22], [12, 24], [11, 25], [11, 25], [11, 25]], 'skin');
+      d.fill(13, 12, 14, 12, 'brow');
+    }
+    if (HEADS[eq.head]) HEADS[eq.head](d);
+  }
+
+  function renderDir(o, dir, frame) {
+    var gm = paintDir(o, dir, frame), g = gm.g, M = gm.M;
+    var at = function (x, y) { return (x >= 0 && y >= 0 && x < W && y < H ? g[y * W + x] : null); };
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgba(18, 10, 30, 0.3)';
+    ctx.fillRect(11, 46, 18, 1); ctx.fillRect(14, 47, 12, 1);
+    var img = ctx.getImageData(0, 0, W, H), out = img.data;
+    var put = function (i, col, a) {
+      if (a === undefined) a = 1;
+      var rgb = hex(col), k = i * 4, t = a + (out[k + 3] / 255) * (1 - a);
+      out[k] = rgb[0]; out[k + 1] = rgb[1]; out[k + 2] = rgb[2]; out[k + 3] = Math.round(t * 255);
+    };
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      var k = at(x, y), i = y * W + x;
+      if (k) {
+        var m = M[k];
+        if (m.flat) { put(i, m.c, m.a || 1); continue; }
+        var same = function (dx, dy) { var n = at(x + dx, y + dy); return n === k || (n && M[n].base === k); };
+        var col = m.c;
+        if (k === 'skin' && CAST.has(at(x, y - 1))) col = dark(m.c);
+        else if (!same(1, 0) || !same(0, 1) || (!same(2, 0) && same(-2, 0))) col = dark(m.c);
+        else if (!same(-1, 0) || !same(0, -1)) col = lite(m.c);
+        put(i, col);
+      } else {
+        for (var di = 0; di < 4; di++) {
+          var dd = [[0, 1], [0, -1], [-1, 0], [1, 0]][di];
+          var n = at(x + dd[0], y + dd[1]);
+          if (n && !M[n].noLine) { put(i, line(M[n].base ? M[M[n].base].c : M[n].c)); break; }
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  }
+
+  function renderAll(o) {
+    var r = {};
+    ['down', 'up', 'left', 'right'].forEach(function (dir) {
+      r[dir + '_0'] = renderDir(o, dir, 0);
+      r[dir + '_1'] = renderDir(o, dir, 1);
+    });
+    return r;
+  }
+
+  root.SPRITE = { W, H, SKINS, HAIRS, render, html, renderDir, renderAll };
 })(this);

@@ -28,7 +28,7 @@ process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'local-mo
 const gameApi = require('./api/game/[action].js'); // reads the env vars above at require time
 
 /* ---------- mock DB (a local JSON file standing in for Supabase/PostgREST) ---------- */
-const DB_FILE = path.join(ROOT, 'game-local-db.json');
+const DB_FILE = process.env.DB_PATH || path.join(ROOT, 'game-local-db.json');
 let rows = [];
 let nextId = 1;
 try {
@@ -87,7 +87,7 @@ function serveStatic(req, res) {
   if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
 }
@@ -129,4 +129,44 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res);
 });
 
-server.listen(PORT, () => console.log(`dev server (static + /api + mock db) on http://localhost:${PORT}/game/  [${rows.length} local account(s)]`));
+/* ---------- WebSocket presence for multiplayer ---------- */
+const { WebSocketServer } = require('ws');
+const wss = new WebSocketServer({ server, path: '/ws/city' });
+const clients = new Map(); // playerId -> { id, name, x, y, facing, frame, ws }
+
+function broadcast() {
+  const list = [...clients.values()].map(({ ws, ...rest }) => rest);
+  const msg = JSON.stringify({ type: 'state', players: list });
+  for (const c of clients.values()) { try { c.ws.send(msg); } catch (e) {} }
+}
+
+wss.on('connection', (ws) => {
+  let playerId = null;
+
+  ws.on('message', (data) => {
+    let msg;
+    try { msg = JSON.parse(data); } catch (e) { return; }
+
+    if (msg.type === 'join') {
+      playerId = msg.id;
+      console.log('WS join:', msg.name, '(' + msg.id + ')');
+      clients.set(playerId, { id: playerId, name: msg.name, char: msg.char || null, x: 0, y: 0, facing: 'down', frame: 0, ws });
+      broadcast();
+    } else if (msg.type === 'move' && playerId && clients.has(playerId)) {
+      const c = clients.get(playerId);
+      c.x = msg.x; c.y = msg.y; c.facing = msg.facing; c.frame = msg.frame;
+      broadcast();
+    }
+  });
+
+  ws.on('close', () => {
+    if (playerId && clients.has(playerId)) {
+      console.log('WS leave:', playerId);
+      clients.delete(playerId);
+      const msg = JSON.stringify({ type: 'leave', id: playerId });
+      for (const c of clients.values()) { try { c.ws.send(msg); } catch (e) {} }
+    }
+  });
+});
+
+server.listen(PORT, () => console.log(`dev server (static + /api + mock db + ws) on http://localhost:${PORT}/game/  [${rows.length} local account(s)]`));
