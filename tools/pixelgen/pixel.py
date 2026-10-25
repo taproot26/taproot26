@@ -116,3 +116,123 @@ def sprite(make):
     c = make()
     c.outline()
     return c.image()
+
+
+# ---------------------------------------------------------------- shapes
+
+def clip_below(c, y0):
+    """Erase everything under row y0 (flat bases for domes, caps, slimes)."""
+    for y in range(y0 + 1, c.h):
+        for x in range(c.w):
+            c.p[y][x] = None
+
+
+def inside(px, py, pts):
+    ins, j = False, len(pts) - 1
+    for i in range(len(pts)):
+        (xi, yi), (xj, yj) = pts[i], pts[j]
+        if (yi > py) != (yj > py) and px < (xj - xi) * (py - yi) / (yj - yi) + xi:
+            ins = not ins
+        j = i
+    return ins
+
+
+def poly(c, pts, col):
+    """Fill a polygon (pixel centres inside it)."""
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    for y in range(int(min(ys)), int(max(ys)) + 1):
+        for x in range(int(min(xs)), int(max(xs)) + 1):
+            if inside(x + 0.5, y + 0.5, pts):
+                c.px(x, y, col)
+
+
+def line(c, x0, y0, x1, y1, col, w=1):
+    n = int(max(abs(x1 - x0), abs(y1 - y0))) + 1
+    for i in range(n):
+        t = i / max(1, n - 1)
+        x, y = round(x0 + (x1 - x0) * t), round(y0 + (y1 - y0) * t)
+        for k in range(w):
+            c.px(x + k, y, col)
+
+
+def shade_cols(c, x0, x1, y0, y1, rmp, base=None):
+    """Re-colour a region's existing pixels by column: left lit, right shaded."""
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            if c.get(x, y) is not None:
+                t = (x - x0) / max(1, x1 - x0)
+                c.px(x, y, band(rmp, 0.55 - t * 1.2) if base is None else base)
+
+
+# --------------------------------------------------------------- sheets
+
+def strip(frames, w, h, cols=None):
+    """Pack equally sized frames into a sheet, row-major."""
+    cols = cols or len(frames)
+    rows = (len(frames) + cols - 1) // cols
+    out = Image.new("RGBA", (cols * w, rows * h), (0, 0, 0, 0))
+    for i, im in enumerate(frames):
+        out.alpha_composite(im, ((i % cols) * w + (w - im.width) // 2, (i // cols) * h + (h - im.height)))
+    return out
+
+
+def grass_bg(w, h, seed=7):
+    import random
+    rng = random.Random(seed)
+    cols = [hx("6db54f"), hx("66ab48"), hx("74bd56")]
+    img = Image.new("RGBA", (w, h))
+    for y in range(h):
+        for x in range(w):
+            r = rng.random()
+            img.putpixel((x, y), cols[0] if r < 0.7 else cols[1] if r < 0.88 else cols[2])
+    return img
+
+
+def checker_bg(w, h, cell=4):
+    img = Image.new("RGBA", (w, h))
+    for y in range(h):
+        for x in range(w):
+            img.putpixel((x, y), (236, 233, 226, 255) if ((x // cell) + (y // cell)) % 2 else (224, 220, 212, 255))
+    return img
+
+
+def preview(groups, scale=6, max_w=230, bg="grass", gap=12):
+    """Labelled contact sheet. `groups` is a list of (label, [frames]); each
+    group's frames sit side by side with the label underneath, wrapping rows."""
+    from PIL import ImageDraw, ImageFont
+    rows, row, x = [], [], 0
+    for g in groups:
+        gw = sum(im.width for im in g[1]) + 2 * (len(g[1]) - 1)
+        if row and x + gw > max_w:
+            rows.append(row); row, x = [], 0
+        row.append(g); x += gw + gap
+    if row:
+        rows.append(row)
+    label_h = 9
+    heights = [max(im.height for _, ims in r for im in ims) for r in rows]
+    W = max(sum(sum(im.width for im in ims) + 2 * (len(ims) - 1) for _, ims in r) + gap * (len(r) - 1) for r in rows) + 2 * gap
+    H = sum(h + label_h + 6 for h in heights) + 6
+    base = grass_bg(W, H) if bg == "grass" else checker_bg(W, H)
+    spots, top = [], 6
+    for r, h in zip(rows, heights):
+        rw = sum(sum(im.width for im in ims) + 2 * (len(ims) - 1) for _, ims in r) + gap * (len(r) - 1)
+        x = (W - rw) // 2
+        for name, ims in r:
+            gx = x
+            for im in ims:
+                base.alpha_composite(im, (x, top + h - im.height))
+                x += im.width + 2
+            spots.append((name, (gx + x - 2) / 2, top + h))
+            x += gap - 2
+        top += h + label_h + 6
+    big = base.resize((W * scale, H * scale), Image.NEAREST)
+    d = ImageDraw.Draw(big)
+    font = ImageFont.load_default(size=max(14, scale * 3))
+    dark = bg != "grass"
+    for name, cx, bottom in spots:
+        tw = d.textlength(name, font=font)
+        tx, ty = cx * scale - tw / 2, bottom * scale + scale
+        if not dark:
+            d.text((tx + 2, ty + 2), name, font=font, fill=(20, 40, 18, 255))
+        d.text((tx, ty), name, font=font, fill=(52, 40, 32, 255) if dark else (255, 255, 255, 255))
+    return big

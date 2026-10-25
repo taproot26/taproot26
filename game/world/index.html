@@ -16,17 +16,58 @@
     image-rendering: pixelated; background: #2f7d2b;
   }
   @media (max-width: 600px) { #minimap { width: 128px; height: 96px; } }
+  .hud { max-width: calc(100% - 240px); }
+  .stats { margin-top: 6px; font-size: 12px; }
+  @media (max-width: 600px) { .hud { max-width: calc(100% - 172px); } .hint { display: none; } }
+  .hpbar { display: inline-block; vertical-align: middle; width: 120px; height: 10px; margin-right: 6px; background: rgba(0, 0, 0, 0.55); border: 2px solid #1f2a1f; border-radius: 3px; overflow: hidden; }
+  #hpFill { height: 100%; width: 100%; background: linear-gradient(#7ae05a, #46a83a); transition: width 0.2s; }
+  .controls {
+    position: fixed; z-index: 3; display: flex; gap: 10px; align-items: flex-end;
+    right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
+  .controls button {
+    font: 700 14px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); cursor: pointer;
+    border: 3px solid #1f2a1f; border-radius: 10px; padding: 10px 14px; background: #3a6a2e; box-shadow: 0 3px 0 #1f2a1f;
+    touch-action: manipulation; user-select: none;
+  }
+  .controls button:active { transform: translateY(2px); box-shadow: 0 1px 0 #1f2a1f; }
+  #attackBtn { width: 84px; height: 84px; border-radius: 50%; font-size: 15px; background: radial-gradient(circle at 35% 30%, #e8634e, #a8262e); }
+  .controls kbd { font: 600 10px monospace; opacity: 0.8; margin-left: 4px; }
+  .bag {
+    position: fixed; right: 12px; top: 172px; z-index: 3; width: 252px; box-sizing: border-box; padding: 10px;
+    background: #f6efdc; color: #3a2416; font: 600 13px/1.3 system-ui, sans-serif;
+    border: 3px solid #4a2c18; border-radius: 10px; box-shadow: 0 4px 0 #2a1a10, 0 8px 20px rgba(0, 0, 0, 0.4);
+  }
+  .bag-head { display: flex; justify-content: space-between; align-items: center; font-weight: 800; margin-bottom: 8px; }
+  .bag-head span { display: flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+  .bag-head img { width: 20px; height: 20px; image-rendering: pixelated; }
+  .bag-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .bag-item { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 6px; background: #ece0c0; border: 2px solid #c8b088; border-radius: 6px; }
+  .bag-item img { width: 32px; height: 32px; image-rendering: pixelated; flex: none; }
+  .bag-item span { min-width: 0; font-size: 12px; }
+  .bag-item b { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .bag-empty { grid-column: 1 / -1; margin: 0; color: #7a6a52; font-weight: 500; }
 </style>
 <script>
 if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
 </script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
 <script src="/game/sprite.js"></script>
+<script src="/game/items.js"></script>
 </head>
 <body>
 <div id="game"></div>
-<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">Go to the city</a><br>Arrow keys / WASD to move, Shift to run</div>
-<canvas id="minimap" width="192" height="144" aria-label="Minimap"></canvas>
+<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">Go to the city</a><span class="hint"><br>Arrow keys / WASD to move, Shift to run, Space to attack, B for bag</span>
+  <div class="stats"><div class="hpbar"><div id="hpFill"></div></div><span id="hpText"></span><div id="xpText"></div></div>
+</div>
+<div class="controls">
+  <button id="bagBtn" type="button" tabindex="-1">Bag<kbd>B</kbd></button>
+  <button id="attackBtn" type="button" tabindex="-1">Attack</button>
+</div>
+<div class="bag" id="bagPanel" hidden>
+  <div class="bag-head">Bag <span id="bagGold"></span></div>
+  <div class="bag-grid" id="bagGrid"></div>
+</div><canvas id="minimap" width="192" height="144" aria-label="Minimap"></canvas>
 
 <script>
 /* ============================================================================
@@ -109,6 +150,22 @@ for (let i = TREES.length - 1; i >= 0; i--) {
   if (ty <= 2 && tx >= NORTH_GATE[0] - 1 && tx <= NORTH_GATE[1] + 1) TREES.splice(i, 1);
 }
 const FENCES = [[40, 47, 13], [26, 39, 25], [41, 47, 25]]; // x1, x2, row
+
+/* ---------- monsters (sprites from tools/pixelgen/monsters.py) ---------- */
+const MONSTERS = {
+  slime:  { sheet: 'monsters', row: 0, hp: 30,  speed: 24, dmg: 6,  xp: 5,  fps: 3, aggro: 70, drop: 'slime_gel', gold: [1, 2] },
+  shroom: { sheet: 'monsters', row: 1, hp: 45,  speed: 18, dmg: 8,  xp: 8,  fps: 3, aggro: 60, drop: 'spore_cap', gold: [1, 3] },
+  bat:    { sheet: 'monsters', row: 2, hp: 24,  speed: 44, dmg: 5,  xp: 7,  fps: 8, aggro: 96, drop: 'bat_fang', gold: [1, 2], fly: true },
+  goblin: { sheet: 'monsters', row: 3, hp: 60,  speed: 32, dmg: 12, xp: 15, fps: 4, aggro: 88, drop: 'goblin_ear', gold: [3, 5] },
+  king:   { sheet: 'king',     row: 0, hp: 200, speed: 16, dmg: 18, xp: 60, fps: 3, aggro: 80, drop: 'royal_jelly', gold: [15, 25], big: true, respawn: 45000 },
+};
+// Drop icons from tools/pixelgen/loot.py; `frame` is the index in loot.png.
+const LOOT = {
+  slime_gel: { name: 'Slime Gel', frame: 0 }, spore_cap: { name: 'Spore Cap', frame: 1 }, bat_fang: { name: 'Bat Fang', frame: 2 },
+  goblin_ear: { name: 'Goblin Ear', frame: 3 }, royal_jelly: { name: 'Royal Jelly', frame: 4 },
+};
+const SPAWN_LIST = ['slime', 'slime', 'slime', 'slime', 'shroom', 'shroom', 'shroom', 'bat', 'bat', 'goblin', 'goblin', 'king'];
+const FIELD_KEY = 'taproot_field'; // local XP, kills, gold and bag
 
 /* ---------- tiny helpers ---------- */
 function hash(x, y, s) {
@@ -272,6 +329,11 @@ class Overworld extends Phaser.Scene {
   preload() {
     this.load.image('sheet_objects', '/game/world/assets/objects.webp');
     this.load.image('sheet_player', '/game/world/assets/player.webp');
+    this.load.spritesheet('monsters', '/game/world/assets/monsters/monsters.png', { frameWidth: 24, frameHeight: 24 });
+    this.load.spritesheet('king', '/game/world/assets/monsters/king_slime.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('slash', '/game/world/assets/monsters/slash.png', { frameWidth: 24, frameHeight: 24 });
+    this.load.spritesheet('loot', '/game/world/assets/loot/loot.png', { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('coin', '/game/world/assets/loot/coin.png', { frameWidth: 16, frameHeight: 16 });
   }
 
   create() {
@@ -284,6 +346,7 @@ class Overworld extends Phaser.Scene {
     this.addCharacters();
     this.addSparkles();
     this.buildMinimap();
+    this.setupCombat();
 
     const cam = this.cameras.main;
     const zoom = () => Math.max(2, Math.min(4, Math.floor(Math.min(window.innerWidth / 320, window.innerHeight / 220))));
@@ -295,6 +358,7 @@ class Overworld extends Phaser.Scene {
     const K = Phaser.Input.Keyboard.KeyCodes;
     this.keys = this.input.keyboard.addKeys({
       left: K.LEFT, right: K.RIGHT, up: K.UP, down: K.DOWN, a: K.A, d: K.D, w: K.W, s: K.S, shift: K.SHIFT,
+      space: K.SPACE, j: K.J, b: K.B, esc: K.ESC,
     });
     this.facing = 'down';
     this.walkT = 0;
@@ -473,9 +537,288 @@ class Overworld extends Phaser.Scene {
     x.drawImage(this.miniStatic, 0, 0);
     x.strokeStyle = 'rgba(255, 255, 255, 0.75)'; x.lineWidth = 1;
     x.strokeRect(Math.round(v.x / T * MINI) + 0.5, Math.round(v.y / T * MINI) + 0.5, Math.round(v.width / T * MINI), Math.round(v.height / T * MINI));
+    (this.monsters || []).forEach((m) => {
+      if (m.dead) return;
+      x.fillStyle = m.cfg.big ? '#c06aff' : '#ff9a2a';
+      x.fillRect(Math.round(m.spr.x / T * MINI) - 1, Math.round((m.spr.y - 6) / T * MINI) - 1, 3, 3);
+    });
     const px = Math.round(this.player.x / T * MINI), py = Math.round((this.player.y - 6) / T * MINI);
     x.fillStyle = '#111'; x.fillRect(px - 3, py - 3, 6, 6);
     x.fillStyle = Math.floor(time / 350) % 2 ? '#ff3b30' : '#ffffff'; x.fillRect(px - 2, py - 2, 4, 4);
+  }
+
+  /* ---------- monsters & combat ---------- */
+  setupCombat() {
+    Object.entries(MONSTERS).forEach(([type, m]) => {
+      this.anims.create({ key: `${type}_idle`, frameRate: m.fps, repeat: -1,
+        frames: this.anims.generateFrameNumbers(m.sheet, { start: m.row * 2, end: m.row * 2 + 1 }) });
+    });
+    this.anims.create({ key: 'slash', frameRate: 24, frames: this.anims.generateFrameNumbers('slash', { start: 0, end: 2 }) });
+    this.anims.create({ key: 'coin_spin', frameRate: 8, repeat: -1, frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 3 }) });
+
+    // HP / ATK / DEF come from the saved character and its armory gear.
+    let ch = null;
+    try { ch = JSON.parse(localStorage.getItem('taproot_character')); } catch (e) {}
+    let st = null;
+    if (ch && typeof GAME !== 'undefined' && GAME.BASE[ch.cls]) {
+      const eq = GAME.migrateEquipment(Object.assign({}, ch.equipment || GAME.defaultEquipment(ch.cls)));
+      st = GAME.computeStats(ch.cls, eq);
+    }
+    this.stats = { hp: st ? st.hp : 100, atk: st ? st.atk : 10, def: st ? st.def : 4 };
+    this.hp = this.stats.hp;
+    this.inv = 0;
+    this.attackCd = 0;
+    this.fainted = false;
+    this.pkb = { x: 0, y: 0, t: 0 };
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(FIELD_KEY)); } catch (e) {}
+    this.field = Object.assign({ xp: 0, kills: 0, gold: 0 }, saved);
+    if (!this.field.bag || typeof this.field.bag !== 'object') this.field.bag = {};
+    this.bars = this.add.graphics().setDepth(9000);
+    this.monsters = [];
+    this.drops = [];
+    SPAWN_LIST.forEach((type) => this.spawnMonster(type));
+
+    document.getElementById('attackBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); this.trySwing(); });
+    document.getElementById('bagBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); this.toggleBag(); });
+    this.updateHud();
+  }
+
+  trySwing() {
+    if (!this.fainted && this.attackCd <= 0) this.swing();
+  }
+
+  saveField() {
+    try { localStorage.setItem(FIELD_KEY, JSON.stringify(this.field)); } catch (e) {}
+  }
+
+  // Every kill drops gold and the monster's own item, which pop out and wait to be walked over.
+  dropLoot(m) {
+    const [g0, g1] = m.cfg.gold, s = m.spr;
+    this.spawnDrop({ kind: 'gold', amount: g0 + Math.floor(Math.random() * (g1 - g0 + 1)) }, s.x - 7, s.y);
+    this.spawnDrop({ kind: 'item', id: m.cfg.drop, amount: 1 }, s.x + 7, s.y);
+  }
+
+  spawnDrop(d, x, y) {
+    const spr = d.kind === 'gold' ? this.add.sprite(x, y - 10, 'coin', 0).play('coin_spin') : this.add.sprite(x, y - 10, 'loot', LOOT[d.id].frame);
+    spr.setOrigin(0.5, 0.85).setDepth(y);
+    Object.assign(d, { spr, x, y, born: this.time.now, ready: false, taken: false });
+    this.tweens.add({ targets: spr, y, duration: 380, ease: 'Bounce.easeOut', onComplete: () => {
+      d.ready = true;
+      if (!d.taken) this.tweens.add({ targets: spr, y: y - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    } });
+    this.drops.push(d);
+  }
+
+  updateDrops() {
+    const p = this.player;
+    for (const d of this.drops) {
+      if (this.time.now - d.born > 60000) { // uncollected drops fade after a minute
+        d.taken = true;
+        this.tweens.killTweensOf(d.spr);
+        this.tweens.add({ targets: d.spr, alpha: 0, duration: 400, onComplete: () => d.spr.destroy() });
+      } else if (d.ready && !this.fainted && Math.hypot(p.x - d.x, p.y - d.y) < 13) {
+        this.collect(d);
+      }
+    }
+    this.drops = this.drops.filter((d) => !d.taken);
+  }
+
+  collect(d) {
+    d.taken = true;
+    this.tweens.killTweensOf(d.spr);
+    this.tweens.add({ targets: d.spr, x: this.player.x, y: this.player.y - 14, alpha: 0, scale: 0.5, duration: 220, onComplete: () => d.spr.destroy() });
+    if (d.kind === 'gold') {
+      this.field.gold += d.amount;
+      this.floatText(this.player.x, this.player.y - 34, `+${d.amount} gold`, '#ffd34a');
+    } else {
+      this.field.bag[d.id] = (this.field.bag[d.id] || 0) + d.amount;
+      this.floatText(this.player.x, this.player.y - 34, `+1 ${LOOT[d.id].name}`, '#ffffff');
+    }
+    this.saveField();
+    this.updateHud();
+    this.renderBag();
+  }
+
+  toggleBag(open) {
+    const panel = document.getElementById('bagPanel');
+    panel.hidden = open === undefined ? !panel.hidden : !open;
+    if (!panel.hidden) this.renderBag();
+  }
+
+  renderBag() {
+    document.getElementById('bagGold').innerHTML = `<img src="/game/world/assets/loot/gold.png" alt="">${this.field.gold} gold`;
+    const items = Object.entries(this.field.bag).filter(([id, n]) => LOOT[id] && n > 0);
+    document.getElementById('bagGrid').innerHTML = items.length
+      ? items.map(([id, n]) => `<div class="bag-item"><img src="/game/world/assets/loot/${id}.png" alt=""><span>${LOOT[id].name}</span><b>x${n}</b></div>`).join('')
+      : '<p class="bag-empty">Your bag is empty. Defeat monsters to collect their drops.</p>';
+  }
+
+  // Mostly spawn in tall grass, never right next to the player.
+  spawnMonster(type) {
+    const cfg = MONSTERS[type];
+    let tx = START.x, ty = START.y;
+    for (let tries = 0; tries < 300; tries++) {
+      if (Math.random() < 0.7) {
+        const r = TALL[Math.floor(Math.random() * TALL.length)];
+        tx = r[0] + Math.floor(Math.random() * (r[2] - r[0] + 1));
+        ty = r[1] + Math.floor(Math.random() * (r[3] - r[1] + 1));
+      } else {
+        tx = 2 + Math.floor(Math.random() * (MAP_W - 4));
+        ty = 3 + Math.floor(Math.random() * (MAP_H - 6));
+      }
+      if (this.blocked[ty][tx]) continue;
+      if (Math.hypot(tx * T - this.player.x, ty * T - this.player.y) < 8 * T) continue;
+      break;
+    }
+    const spr = this.add.sprite(tx * T + 8, ty * T + 12, cfg.sheet, cfg.row * 2).setOrigin(0.5, cfg.big ? 0.9 : 0.88);
+    spr.play(`${type}_idle`);
+    this.monsters.push({ type, cfg, spr, hp: cfg.hp, vx: 0, vy: 0, t: 0, kb: 0, kbx: 0, kby: 0 });
+  }
+
+  monsterFree(m, x, y) {
+    if (x < 8 || y < 10 || x > MAP_W * T - 8 || y > MAP_H * T - 4) return false;
+    if (m.cfg.fly) return true;
+    const r = m.cfg.big ? 9 : 5;
+    return [[-r, 0], [r, 0], [-r, -4], [r, -4]].every(([ox, oy]) => !this.blocked[Math.floor((y + oy) / T)][Math.floor((x + ox) / T)]);
+  }
+
+  updateCombat(delta) {
+    const dt = delta / 1000, p = this.player;
+    this.attackCd -= delta;
+    this.inv -= delta;
+    p.setAlpha(this.inv > 0 && Math.floor(this.inv / 80) % 2 ? 0.35 : 1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.space) || Phaser.Input.Keyboard.JustDown(this.keys.j)) this.trySwing();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.b)) this.toggleBag();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.esc)) this.toggleBag(false);
+    this.updateDrops();
+
+    this.bars.clear();
+    for (const m of this.monsters) {
+      if (m.dead) continue;
+      const s = m.spr, dx = p.x - s.x, dy = p.y - s.y, dist = Math.hypot(dx, dy) || 1;
+      let vx, vy;
+      if (m.kb > 0) {
+        m.kb -= delta; vx = m.kbx; vy = m.kby;
+      } else if (!this.fainted && dist < m.cfg.aggro) {
+        vx = dx / dist * m.cfg.speed; vy = dy / dist * m.cfg.speed;
+      } else {
+        m.t -= delta;
+        if (m.t <= 0) { // wander: pick a new heading or stand still for a bit
+          const a = Math.random() * Math.PI * 2, idle = Math.random() < 0.4;
+          m.vx = idle ? 0 : Math.cos(a) * m.cfg.speed * 0.5;
+          m.vy = idle ? 0 : Math.sin(a) * m.cfg.speed * 0.5;
+          m.t = 700 + Math.random() * 1600;
+        }
+        vx = m.vx; vy = m.vy;
+      }
+      if (this.monsterFree(m, s.x + vx * dt, s.y)) s.x += vx * dt; else m.t = 0;
+      if (this.monsterFree(m, s.x, s.y + vy * dt)) s.y += vy * dt; else m.t = 0;
+      if (Math.abs(vx) > 1) s.setFlipX(vx < 0);
+      s.setDepth(s.y);
+
+      if (!this.fainted && this.inv <= 0 && dist < (m.cfg.big ? 16 : 11)) this.hurtPlayer(m, dx, dy, dist);
+      if (m.hp < m.cfg.hp) {
+        const w = m.cfg.big ? 22 : 14, top = s.y - (m.cfg.big ? 30 : 22), frac = Math.max(0, m.hp / m.cfg.hp);
+        this.bars.fillStyle(0x1a1a1a, 0.85).fillRect(s.x - w / 2 - 1, top - 1, w + 2, 4);
+        this.bars.fillStyle(frac > 0.5 ? 0x5ad04a : frac > 0.25 ? 0xf0c43a : 0xe0503a, 1).fillRect(s.x - w / 2, top, w * frac, 2);
+      }
+    }
+
+    if (this.pkb.t > 0) { // knockback after the player gets hit
+      this.pkb.t -= delta;
+      if (this.free(p.x + this.pkb.x * dt, p.y)) p.x += this.pkb.x * dt;
+      if (this.free(p.x, p.y + this.pkb.y * dt)) p.y += this.pkb.y * dt;
+    }
+  }
+
+  swing() {
+    this.attackCd = 360;
+    const p = this.player;
+    const [ux, uy, angle] = { right: [1, 0, 0], left: [-1, 0, 180], down: [0, 1, 90], up: [0, -1, -90] }[this.facing];
+    const hx = p.x + ux * 12, hy = p.y - 8 + uy * 12;
+    const fx = this.add.sprite(hx, hy, 'slash', 0).setAngle(angle).setDepth(p.y + 1);
+    fx.play('slash');
+    fx.once('animationcomplete', () => fx.destroy());
+    for (const m of this.monsters) {
+      if (m.dead) continue;
+      const my = m.spr.y - (m.cfg.big ? 10 : 6);
+      if (Math.hypot(m.spr.x - hx, my - hy) < (m.cfg.big ? 20 : 15)) this.hitMonster(m);
+    }
+  }
+
+  hitMonster(m) {
+    const dmg = Math.max(1, Math.round(this.stats.atk + Math.random() * 4));
+    m.hp -= dmg;
+    m.spr.setTintFill(0xffffff);
+    this.time.delayedCall(90, () => { if (m.spr.active) m.spr.clearTint(); });
+    const dx = m.spr.x - this.player.x, dy = m.spr.y - this.player.y, d = Math.hypot(dx, dy) || 1;
+    const push = m.cfg.big ? 70 : 140;
+    m.kb = 160; m.kbx = dx / d * push; m.kby = dy / d * push;
+    this.floatText(m.spr.x, m.spr.y - (m.cfg.big ? 32 : 24), String(dmg), '#ffffff');
+    if (m.hp <= 0) this.killMonster(m);
+  }
+
+  killMonster(m) {
+    m.dead = true;
+    const s = m.spr;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const part = this.add.image(s.x, s.y - 6, 'spark').setDepth(s.y + 2).setTint(i % 2 ? 0xffffff : 0xcfd8e0);
+      this.tweens.add({ targets: part, x: s.x + Math.cos(a) * 12, y: s.y - 6 + Math.sin(a) * 10, alpha: 0, duration: 380, onComplete: () => part.destroy() });
+    }
+    this.tweens.add({ targets: s, alpha: 0, scaleY: 0.4, duration: 220, onComplete: () => s.destroy() });
+    this.dropLoot(m);
+    const before = 1 + Math.floor(this.field.xp / 100);
+    this.field.xp += m.cfg.xp;
+    this.field.kills += 1;
+    this.saveField();
+    this.floatText(s.x, s.y - 36, `+${m.cfg.xp} XP`, '#ffe066');
+    if (1 + Math.floor(this.field.xp / 100) > before) this.floatText(this.player.x, this.player.y - 40, 'LEVEL UP!', '#7ae0ff');
+    this.updateHud();
+    this.time.delayedCall(m.cfg.respawn || 12000 + Math.random() * 6000, () => {
+      this.monsters = this.monsters.filter((o) => o !== m);
+      this.spawnMonster(m.type);
+    });
+  }
+
+  hurtPlayer(m, dx, dy, dist) {
+    const dmg = Math.max(1, Math.round(m.cfg.dmg * 50 / (50 + this.stats.def))); // DEF reduces damage by a percentage
+    this.hp = Math.max(0, this.hp - dmg);
+    this.inv = 900;
+    this.pkb = { x: dx / dist * 150, y: dy / dist * 150, t: 160 };
+    this.cameras.main.shake(120, 0.004);
+    this.floatText(this.player.x, this.player.y - 32, `-${dmg}`, '#ff6b6b');
+    this.updateHud();
+    if (this.hp <= 0) this.faint();
+  }
+
+  faint() {
+    this.fainted = true;
+    const cam = this.cameras.main;
+    this.floatText(this.player.x, this.player.y - 44, 'You fainted...', '#ffffff');
+    cam.fadeOut(700, 0, 0, 0);
+    cam.once('camerafadeoutcomplete', () => {
+      this.player.setPosition(START.x * T + 8, START.y * T + 12);
+      this.hp = this.stats.hp;
+      this.inv = 1500;
+      this.fainted = false;
+      this.updateHud();
+      cam.fadeIn(500, 0, 0, 0);
+    });
+  }
+
+  floatText(x, y, msg, color) {
+    const t = this.add.text(x, y, msg, { fontFamily: 'monospace', fontSize: '8px', fontStyle: 'bold', color, stroke: '#1a1a1a', strokeThickness: 2 })
+      .setOrigin(0.5).setDepth(9500).setResolution(4);
+    this.tweens.add({ targets: t, y: y - 12, alpha: 0, duration: 750, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+  }
+
+  updateHud() {
+    const lvl = 1 + Math.floor(this.field.xp / 100);
+    document.getElementById('hpFill').style.width = `${(this.hp / this.stats.hp) * 100}%`;
+    document.getElementById('hpText').textContent = `HP ${this.hp} / ${this.stats.hp}`;
+    document.getElementById('xpText').textContent = `Lv ${lvl} · ${this.field.xp % 100}/100 XP · ${this.field.gold} gold · ${this.field.kills} defeated`;
   }
 
   // Player hitbox: 10px wide, 5px tall, at the feet.
@@ -488,8 +831,8 @@ class Overworld extends Phaser.Scene {
 
   update(time, delta) {
     const k = this.keys, p = this.player;
-    const ix = (k.right.isDown || k.d.isDown ? 1 : 0) - (k.left.isDown || k.a.isDown ? 1 : 0);
-    const iy = (k.down.isDown || k.s.isDown ? 1 : 0) - (k.up.isDown || k.w.isDown ? 1 : 0);
+    const ix = this.fainted ? 0 : (k.right.isDown || k.d.isDown ? 1 : 0) - (k.left.isDown || k.a.isDown ? 1 : 0);
+    const iy = this.fainted ? 0 : (k.down.isDown || k.s.isDown ? 1 : 0) - (k.up.isDown || k.w.isDown ? 1 : 0);
     const moving = ix !== 0 || iy !== 0;
     const run = k.shift.isDown;
     if (moving) {
@@ -513,6 +856,7 @@ class Overworld extends Phaser.Scene {
       this.leaving = true;
       window.location.href = '/game/city/?from=world';
     }
+    this.updateCombat(delta);
     this.drawMinimap(time);
   }
 }

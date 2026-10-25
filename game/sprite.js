@@ -26,7 +26,11 @@
     mage_robe:    { shirt: '#5b3f9a', sleeves: 'wide', boots: '#2e2244', belt: '#d9b04f', robe: true, extra: 'robe' },
     ranger_tunic: { shirt: '#4f8a3c', sleeves: 'long', bracer: '#7a5230', pants: '#7a5a3a', boots: '#4a3020', bootTop: 40, belt: '#6b4a2e', buckle: '#e0b450', extra: 'ranger' },
     rogue_tunic:  { shirt: '#3c3c4a', sleeves: 'long', bracer: '#26232e', pants: '#2c2c38', boots: '#1f1d26', bootTop: 41, belt: '#2a2430', buckle: '#9aa3b0', extra: 'rogue' },
+    chainmail:    { shirt: '#9aa3b0', sleeve: '#8a93a2', sleeves: 'long', gloves: '#8a93a2', pants: '#5a6270', boots: '#4a4450', belt: '#5a4632', buckle: '#c8ccd4', extra: 'chain' },
+    pirate_coat:  { shirt: '#b02a2c', sleeves: 'long', pants: '#2a2a34', boots: '#1f1d26', bootTop: 39, belt: '#1a1620', buckle: '#e0b450', extra: 'coat' },
   };
+  // Footwear recolours the boots themselves, so it works in every walk frame.
+  const FEET_COLOR = { leather_boots: '#6b4226', swift_sandals: '#b07a46', iron_greaves: '#8f98a6', dragons_stride: '#7a1a24', sea_boots: '#26232e', shadow_treads: '#3a1a5a' };
 
   const EXTRAS = {
     tee(d) { d.fill(18, 23, 21, 23, 'skinArm'); d.fill(19, 24, 20, 24, 'skinArm'); },
@@ -45,6 +49,12 @@
       for (let i = 0; i < 12; i++) { const y = 24 + Math.floor(i * 0.75); d.px(14 + i, y, 'strap'); d.px(14 + i, y + 1, 'strap'); }
     },
     rogue(d) { d.fill(15, 22, 24, 24, 'scarf'); d.fill(14, 25, 15, 29, 'scarf'); d.fill(23, 35, 25, 37, 'pouch'); },
+    chain(d) { for (let y = 24; y <= 32; y++) for (let x = 13; x <= 26; x++) if ((x + y) % 2 === 0) d.px(x, y, 'mailDot'); },
+    coat(d) {
+      d.fill(13, 35, 15, 41, 'body'); d.fill(24, 35, 26, 41, 'body');                 // coat tails over the trousers
+      d.fill(17, 23, 18, 28, 'lapel'); d.fill(21, 23, 22, 28, 'lapel'); d.sym(10, 32, 12, 33, 'lapel');
+      [[17, 30], [22, 30], [17, 32], [22, 32]].forEach(([x, y]) => d.px(x, y, 'button'));
+    },
   };
 
   function body(d, f) {
@@ -133,6 +143,17 @@
       d.fill(13, 3, 14, 5, 'crown'); d.fill(19, 2, 20, 5, 'crown'); d.fill(25, 3, 26, 5, 'crown');
       d.fill(13, 6, 26, 7, 'crown'); d.fill(19, 6, 20, 6, 'gem'); d.px(16, 6, 'gem2'); d.px(23, 6, 'gem2');
     },
+    pirate_tricorn(d) {
+      d.rows(2, [[15, 24], [13, 26], [12, 27], [12, 27], [11, 28]], 'tricorn');
+      d.rows(7, [[6, 33], [8, 31], [17, 22]], 'tricorn');
+      d.span(8, 8, 31, 'tricornTrim'); d.fill(19, 4, 20, 5, 'skull'); d.px(18, 4, 'skull'); d.px(21, 4, 'skull');
+    },
+    horned_helm(d) {
+      [[11, 8], [10, 7], [9, 6], [8, 5], [8, 4], [7, 3], [7, 2]].forEach(([x, y]) => d.sym(x, y, x + 1, y, 'horn'));
+      d.rows(4, [[16, 23], [14, 25], [13, 26]], 'helm'); d.fill(12, 7, 27, 11, 'helm');
+      d.fill(12, 11, 27, 11, 'hornBand'); d.fill(19, 12, 20, 15, 'helm');
+      d.px(16, 6, 'helmHi'); d.px(15, 7, 'helmHi');
+    },
   };
 
   /* ---------- weapons (right hand) ---------- */
@@ -157,6 +178,15 @@
       d.fill(30, 23, 30, 44, 'string');
       for (let y = 22; y <= 45; y++) { const k = Math.abs(y - 34), x = 32 - Math.round(k * k / 55); d.fill(x, y, x + 1, y, 'bow'); }
     },
+    cutlass(d) {
+      for (let y = 13; y <= 31; y++) { const x = 30 + Math.round(((31 - y) / 18) ** 2 * 3); d.fill(x, y, x + 1, y, 'blade'); d.px(x, y, 'bladeHi'); }
+      d.fill(28, 32, 33, 32, 'guard'); d.fill(28, 33, 28, 36, 'guard'); d.fill(33, 33, 33, 35, 'guard');   // basket guard
+      d.fill(30, 33, 31, 38, 'grip');
+    },
+    trident(d) {
+      d.fill(30, 7, 31, 44, 'tridentShaft');
+      d.fill(28, 6, 33, 7, 'prong'); d.fill(28, 1, 28, 5, 'prong'); d.fill(33, 1, 33, 5, 'prong'); d.fill(30, 0, 31, 5, 'prong');
+    },
   };
 
   /* ---------- eyewear ---------- */
@@ -166,6 +196,15 @@
       d.fill(15, 14, 16, 15, 'lensIn'); d.fill(23, 14, 24, 15, 'lensIn');
       d.fill(18, 14, 21, 14, 'lensBridge');
       d.px(13, 14, 'lensBridge'); d.px(26, 14, 'lensBridge');
+    },
+    eyepatch(d) {
+      for (let x = 12; x <= 27; x++) d.px(x, 12 - Math.round((x - 12) / 15), 'patchStrap');
+      d.fill(14, 13, 17, 16, 'patch');
+    },
+    sun_goggles(d) {
+      d.fill(14, 13, 17, 16, 'goggle'); d.fill(22, 13, 25, 16, 'goggle');
+      d.fill(15, 14, 16, 15, 'goggleLens'); d.fill(23, 14, 24, 15, 'goggleLens');
+      d.fill(18, 14, 21, 14, 'goggle'); d.fill(12, 14, 13, 14, 'goggleStrap'); d.fill(26, 14, 27, 14, 'goggleStrap');
     },
   };
 
@@ -178,6 +217,14 @@
       d.fill(7, 29, 8, 30, 'shieldHi');
       d.px(8, 31, 'shieldBoss');
     },
+    ships_compass(d) {
+      d.rows(30, [[7, 9], [6, 10], [6, 10], [6, 10], [7, 9]], 'compass');
+      d.fill(7, 31, 9, 33, 'compassFace'); d.px(8, 31, 'needle'); d.px(8, 32, 'needle');
+    },
+    captains_hook(d) {
+      d.fill(10, 34, 12, 35, 'cuff');
+      d.fill(11, 36, 11, 38, 'hook'); d.px(10, 39, 'hook'); d.px(9, 39, 'hook'); d.px(8, 38, 'hook'); d.px(8, 37, 'hook');
+    },
   };
 
   /* ---------- feet overlays ---------- */
@@ -188,6 +235,7 @@
       d.fill(29, 40, 30, 40, 'wing'); d.fill(30, 41, 31, 41, 'wing'); d.fill(28, 42, 30, 42, 'wing'); d.fill(30, 43, 31, 43, 'wing');
       d.px(29, 40, 'wingHi'); d.px(30, 40, 'wingHi');
     },
+    shadow_treads(d) { [[11, 44], [10, 43], [9, 45], [28, 44], [29, 43], [30, 45]].forEach(([x, y]) => d.px(x, y, 'smoke')); },
   };
 
   /* ---------- pets ---------- */
@@ -200,10 +248,20 @@
       d.px(33, 41, 'slimeHi'); d.px(34, 41, 'slimeHi');
       d.px(34, 42, 'slimeEye'); d.px(36, 42, 'slimeEye');
     },
+    parrot(d) {   // perched on the shoulder away from the weapon hand
+      d.rows(16, [[9, 10], [8, 11], [8, 11], [8, 11], [8, 10], [8, 9]], 'parrot');
+      d.fill(8, 18, 9, 20, 'parrotWing'); d.fill(8, 22, 9, 23, 'parrotWing');
+      d.px(12, 17, 'beak'); d.px(10, 17, 'parrotEye');
+    },
+    baby_kraken(d) {
+      d.rows(39, [[33, 36], [32, 37], [32, 37], [32, 37]], 'kraken');
+      [[32, 43], [32, 44], [34, 43], [34, 44], [35, 43], [35, 44], [37, 43], [37, 44], [31, 45], [33, 45], [36, 45], [38, 45]].forEach(([x, y]) => d.px(x, y, 'kraken'));
+      d.px(33, 41, 'krakenEye'); d.px(36, 41, 'krakenEye');
+    },
   };
 
   /* ---------- materials ---------- */
-  const CAST = new Set(['hair', 'helm', 'helmDark', 'hat', 'hatBand', 'brim', 'hood', 'hoodIn', 'crown']);
+  const CAST = new Set(['hair', 'helm', 'helmDark', 'hat', 'hatBand', 'brim', 'hood', 'hoodIn', 'crown', 'tricorn', 'tricornTrim', 'hornBand']);
 
   function materials(o, f, eq) {
     const skin = SKINS[o.skin] || SKINS[1], hc = HAIRS[o.hc] || HAIRS[0];
@@ -219,7 +277,7 @@
       hair: { c: hc }, hairBack: { c: dark(hc) }, hairHi: { c: mix(hc, '#ffffff', 0.38), flat: true, base: 'hair' },
       hairDk: { c: dark(dark(hc)), flat: true, base: 'hair' },
 
-      body: { c: f.shirt }, arm: { c: f.sleeve || f.shirt }, pants: { c: f.pants || f.shirt }, boot: { c: f.boots },
+      body: { c: f.shirt }, arm: { c: f.sleeve || f.shirt }, pants: { c: f.pants || f.shirt }, boot: { c: FEET_COLOR[eq.feet] || f.boots },
       belt: { c: f.belt || f.shirt }, buckle: { c: f.buckle || '#e0b450', flat: true, base: 'belt' }, bracer: { c: f.bracer || f.shirt },
       trim: { c: '#d9b04f' }, pauldron: { c: '#b4bcc8' }, tabard: { c: '#b2363a' }, emblem: { c: '#e8c060', flat: true, base: 'tabard' },
       mail: { c: '#7d8696' }, strap: { c: '#6b4a2e' }, scarf: { c: '#5a3570' }, pouch: { c: '#6b4a2e' },
@@ -244,6 +302,20 @@
       slime: { c: '#5ec45e' }, slimeHi: { c: '#a0e8a0', flat: true, base: 'slime' },
       slimeEye: { c: '#1a1422', flat: true, base: 'slime' },
       wing: { c: '#f0e8d8' }, wingHi: { c: '#ffffff', flat: true, base: 'wing' },
+
+      mailDot: { c: '#7d8696', flat: true, base: 'body' },
+      lapel: { c: '#f2e8d0' }, button: { c: '#e0b450', flat: true, base: 'body' },
+      tricorn: { c: '#24222c' }, tricornTrim: { c: '#d9a934', flat: true, base: 'tricorn' }, skull: { c: '#f2ead8', flat: true, base: 'tricorn' },
+      horn: { c: '#efe6d0' }, hornBand: { c: '#d9b04f' },
+      tridentShaft: { c: '#2aa0a8' }, prong: { c: '#e0b450' },
+      patch: { c: '#1a1620', flat: true, base: 'skin' }, patchStrap: { c: '#26232e', flat: true, base: 'skin' },
+      goggle: { c: '#b0802a' }, goggleLens: { c: '#f0a030', flat: true, base: 'goggle' }, goggleStrap: { c: '#6b4a2e', flat: true, base: 'skin' },
+      compass: { c: '#c8962a' }, compassFace: { c: '#f2ead8', flat: true, base: 'compass' }, needle: { c: '#d43a3a', flat: true, base: 'compass' },
+      cuff: { c: '#6b4a2e' }, hook: { c: '#c3ccd8' },
+      smoke: { c: '#9a6ae0', flat: true, noLine: true, a: 0.75 },
+      parrot: { c: '#d43a3a' }, parrotWing: { c: '#3a6ad8' }, beak: { c: '#efe6d0', flat: true, base: 'parrot' },
+      parrotEye: { c: '#1a1422', flat: true, base: 'parrot' },
+      kraken: { c: '#8a5ab4' }, krakenEye: { c: '#ffffff', flat: true, base: 'kraken' },
     };
   }
 

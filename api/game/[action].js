@@ -55,7 +55,12 @@ async function sessionUser(req) {
 }
 
 // Until items can be earned, every player owns every item.
-const ownedItems = (user) => (Array.isArray(user.inventory) && user.inventory.length ? user.inventory : ALL_ITEMS);
+// Until items can be earned, every player owns the whole catalog, so items added
+// later are merged into accounts that saved an older inventory.
+const ownedItems = (user) => {
+  const saved = Array.isArray(user.inventory) ? user.inventory.filter((id) => has(G.ITEMS, id)) : [];
+  return [...new Set([...saved, ...ALL_ITEMS])];
+};
 
 function cleanCharacter(c, owned) {
   if (!c || typeof c !== 'object') return null;

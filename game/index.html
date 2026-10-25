@@ -186,6 +186,7 @@
   }
   .icard:hover { transform: translateY(-2px); }
   .icard .icard-icon { font-size: 32px; line-height: 1; }
+  .icard .icard-img { width: 48px; height: 48px; image-rendering: pixelated; }
   .icard-name { font-family: var(--display); font-size: 13px; line-height: 1.2; }
   .icard-rarity {
     font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
@@ -407,11 +408,19 @@
   }
 
   const player = { username: '', hasChar: false, inventory: [] };
-  const BAG = [['Wood', 12], ['Iron Ore', 4], ['Berries', 7], ['Herbs', 3]];
+  const LOOT_NAMES = { slime_gel: 'Slime Gel', spore_cap: 'Spore Cap', bat_fang: 'Bat Fang', goblin_ear: 'Goblin Ear', royal_jelly: 'Royal Jelly' };
+  // Loot collected in the fields (stored locally by /game/world/ under taproot_field).
+  function fieldBag() {
+    let f = null;
+    try { f = JSON.parse(localStorage.getItem('taproot_field')); } catch (e) {}
+    const bag = f && f.bag && typeof f.bag === 'object' ? f.bag : {};
+    const rows = Object.entries(bag).filter(([id, n]) => LOOT_NAMES[id] && n > 0).map(([id, n]) => [LOOT_NAMES[id], n]);
+    return [['Gold', (f && f.gold) || 0], ...rows];
+  }
   const QUESTS = [['Speak to the Gatekeeper', '+20 XP'], ['Gather 10 Wood', '+30 XP'], ['Claim your first plot', '+50 XP']];
 
   function buildHome() {
-    $('bag').innerHTML = BAG.map(([n, q]) => `<li><span>${n}</span><span class="meta">x${q}</span></li>`).join('');
+    $('bag').innerHTML = fieldBag().map(([n, q]) => `<li><span>${n}</span><span class="meta">${n === 'Gold' ? q : `x${q}`}</span></li>`).join('');
     $('quests').innerHTML = QUESTS.map(([n, r]) => `<li><span>${n}</span><span class="meta">${r}</span></li>`).join('');
     let tiles = '';
     for (let r = 0; r < 7; r++) {
@@ -560,7 +569,7 @@
     $('aItems').innerHTML = owned.map((id) => {
       const it = ITEMS[id];
       return `<button type="button" class="icard ${it.rarity}" data-equip="${id}" aria-pressed="${eq[armTab] === id}">`
-        + `<span class="icard-icon">${SLOT_ICONS[armTab]}</span>`
+        + `<img class="icard-img" src="/game/assets/items/${id}.png" alt="" width="48" height="48">`
         + `<b class="icard-name">${it.name}</b>`
         + `<span class="icard-rarity">${RARITIES[it.rarity].label}</span>`
         + `<span class="icard-pwr">PWR +${ipwr(it)}</span></button>`;
