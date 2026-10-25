@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taproot City 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: linear-gradient(#5f86c8 0%, #a9b8d8 45%, #f2c49a 78%, #f6d8b0 100%); }
+  canvas { display: block; }
+  canvas.pixel { image-rendering: pixelated; }
+  .hud {
+    position: fixed; left: 12px; top: 12px; z-index: 2; font: 600 13px/1.5 system-ui, sans-serif; color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75); pointer-events: none;
+  }
+  .hud a { color: #fff; pointer-events: auto; }
+</style>
+<script src="/game/items.js"></script>
+<script src="/game/sprite.js"></script>
+</head>
+<body>
+<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">2D city</a><br>WASD / arrows to move, Shift to run &middot; Q / E rotate &middot; P pixel mode</div>
+<script type="module">
+/* ============================================================================
+   Taproot city plaza in Three.js, "HD-2D" style.
+
+   Real 3D geometry (ground, houses, roofs, fountain) wears pixel-art textures
+   from tools/pixelgen/city3d.py at 16 texture pixels per world unit, sampled
+   with nearest filtering so pixels stay crisp. Trees, lamps, stalls, props and
+   people are camera-facing billboards that still cast shadows. 1 unit = 1 tile.
+   ============================================================================ */
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const ASSETS = '/game/city3d/assets/';
+const PX = 16; // texture pixels per world unit
+
+/* ---------- renderer, scene, lights ---------- */
+const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog('#d9c4a8', 36, 95);
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 200);
+
+scene.add(new THREE.HemisphereLight('#c4dcff', '#6a5a40', 1.15));
+const sun = new THREE.DirectionalLight('#ffe0b4', 2.5);   // late-afternoon sun from the west
+sun.position.set(-14, 20, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 80 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.03;
+scene.add(sun);
+
+/* ---------- textures & materials ---------- */
+const loader = new THREE.TextureLoader();
+function tex(name, repeat = true, onLoad) {
+  const t = loader.load(ASSETS + name + '.png', onLoad);
+  t.magFilter = t.minFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+const lambert = (map, extra = {}) => new THREE.MeshLambertMaterial({ map, ...extra });
+const M = {
+  grass: lambert(tex('tex_grass')), dirt: lambert(tex('tex_dirt')), cobble: lambert(tex('tex_cobble')),
+  stone: lambert(tex('tex_stone')), plaster: lambert(tex('tex_plaster')),
+  slate: lambert(tex('tex_slate'), { side: THREE.DoubleSide }), clay: lambert(tex('tex_clay'), { side: THREE.DoubleSide }),
+  door: lambert(tex('tex_door', false)),
+};
+const winTex = tex('tex_window', false);
+M.window = new THREE.MeshLambertMaterial({ map: winTex, emissive: '#ffb04a', emissiveMap: winTex, emissiveIntensity: 0.55 });
+const waterTex = tex('tex_water');
+M.water = new THREE.MeshLambertMaterial({ map: waterTex, emissive: '#2a6a90', emissiveIntensity: 0.25 });
+
+// A plane whose UVs repeat the texture once every `unitsPerTex` world units (null = stretch once).
+function plane(w, h, mat, unitsPerTex = 1) {
+  const g = new THREE.PlaneGeometry(w, h);
+  if (unitsPerTex) {
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / unitsPerTex, uv.getY(i) * h / unitsPerTex);
+  }
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
+function ground(w, d, mat, y) {
+  const m = plane(w, d, mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = y;
+  m.castShadow = false;
+  scene.add(m);
+}
+
+/* ---------- world layout ---------- */
+const colliders = [];  // { box: [minX, minZ, maxX, maxZ] } or { circle: [x, z, r] }
+const billboards = [];
+
+ground(400, 400, M.grass, 0); // big enough that its edge sits past the fog
+ground(19, 19, M.dirt, 0.005);
+ground(12, 12, M.cobble, 0.01);
+
+// House: stone base, timber-and-plaster walls, a pitched roof, door and lit windows.
+// It is built facing local +Z and then rotated so the front faces `facing` (radians).
+function house({ x, z, w, d, h, rh, roof, facing = 0, chimney = false }) {
+  const g = new THREE.Group();
+  const base = 0.7;
+  const walls = [[0, d / 2, 0, w], [0, -d / 2, Math.PI, w], [w / 2, 0, Math.PI / 2, d], [-w / 2, 0, -Math.PI / 2, d]];
+  for (const [wx, wz, ry, len] of walls) {
+    const lo = plane(len, base, M.stone);
+    const hi = plane(len, h - base, M.plaster, 2);
+    lo.position.set(wx, base / 2, wz); hi.position.set(wx, base + (h - base) / 2, wz);
+    lo.rotation.y = hi.rotation.y = ry;
+    g.add(lo, hi);
+  }
+  const o = 0.35, run = d / 2 + o, slope = Math.atan2(rh, d / 2);
+  const len = Math.hypot(run, rh * run / (d / 2));
+  for (const side of [1, -1]) {  // two roof slopes meeting at a ridge along X
+    const r = plane(w + 2 * o, len, roof === 'clay' ? M.clay : M.slate);
+    const pivot = new THREE.Group();
+    pivot.rotation.y = side > 0 ? 0 : Math.PI;
+    r.rotation.x = -(Math.PI / 2 - slope);
+    r.position.set(0, h + rh - Math.sin(slope) * len / 2, Math.cos(slope) * len / 2);
+    pivot.add(r);
+    g.add(pivot);
+  }
+  for (const side of [1, -1]) {  // gable ends
+    const shape = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, rh)]);
+    const sg = new THREE.ShapeGeometry(shape);
+    const uv = sg.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 2, uv.getY(i) / 2);
+    const gable = new THREE.Mesh(sg, M.plaster);
+    gable.castShadow = gable.receiveShadow = true;
+    gable.position.set(0, h, side * d / 2);
+    gable.rotation.y = side > 0 ? 0 : Math.PI;
+    g.add(gable);
+  }
+  const door = plane(1, 1.5, M.door, null);
+  door.position.set(w > 4 ? -w / 4 : 0, 0.75, d / 2 + 0.02);
+  g.add(door);
+  const wins = w > 4 ? [[w / 4, h * 0.6, d / 2 + 0.02, 0]] : [];
+  wins.push([w / 2 + 0.02, h * 0.6, 0, Math.PI / 2], [-w / 2 - 0.02, h * 0.6, 0, -Math.PI / 2]);
+  if (h > 3.3) wins.push([-w / 4, h * 0.78, d / 2 + 0.02, 0], [w / 4, h * 0.78, d / 2 + 0.02, 0]);
+  for (const [wx, wy, wz, ry] of wins) {
+    const win = plane(0.9, 0.9, M.window, null);
+    win.position.set(wx, wy, wz);
+    win.rotation.y = ry;
+    g.add(win);
+  }
+  if (chimney) {
+    const c = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.6, 0.6), M.stone);
+    c.position.set(w / 4, h + rh * 0.6, -d / 6);
+    c.castShadow = c.receiveShadow = true;
+    g.add(c);
+  }
+  g.position.set(x, 0, z);
+  g.rotation.y = facing;
+  scene.add(g);
+  const sideways = Math.abs(Math.sin(facing)) > 0.5;
+  const hw = (sideways ? d : w) / 2, hd = (sideways ? w : d) / 2;
+  colliders.push({ box: [x - hw, z - hd, x + hw, z + hd] });
+}
+
+// north row faces the plaza (south, +Z); west row faces east; east row faces west
+house({ x: -8, z: -12.5, w: 5, d: 4, h: 3, rh: 2, roof: 'slate' });
+house({ x: -1.5, z: -12.5, w: 4, d: 4, h: 3.8, rh: 2.2, roof: 'clay' });
+house({ x: 5.5, z: -12.5, w: 5, d: 4, h: 3, rh: 2, roof: 'slate', chimney: true });
+house({ x: -13, z: -2, w: 4, d: 4, h: 3, rh: 1.8, roof: 'clay', facing: Math.PI / 2 });
+house({ x: -13, z: 5, w: 4, d: 4, h: 3.4, rh: 2, roof: 'slate', facing: Math.PI / 2, chimney: true });
+house({ x: 13, z: -2, w: 4, d: 4, h: 3.4, rh: 2, roof: 'slate', facing: -Math.PI / 2 });
+house({ x: 13, z: 5, w: 4, d: 4, h: 3, rh: 1.8, roof: 'clay', facing: -Math.PI / 2 });
+
+// fountain in the middle of the plaza
+(function fountain() {
+  const stoneSide = (r, h, y) => {
+    const g = new THREE.CylinderGeometry(r, r * 1.04, h, 32, 1, true);
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * Math.PI * 2 * r, uv.getY(i) * h);
+    const m = new THREE.Mesh(g, M.stone);
+    m.position.y = y; m.castShadow = m.receiveShadow = true;
+    scene.add(m);
+  };
+  stoneSide(2.0, 0.6, 0.3);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.13, 6, 40), new THREE.MeshLambertMaterial({ color: '#b6b2c2' }));
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.6; rim.castShadow = true;
+  scene.add(rim);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.95, 32), M.water);
+  water.rotation.x = -Math.PI / 2; water.position.y = 0.46; water.receiveShadow = true;
+  scene.add(water);
+  stoneSide(0.28, 1.5, 0.75);
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.4, 0.25, 20), M.stone);
+  bowl.position.y = 1.55; bowl.castShadow = true;
+  scene.add(bowl);
+  const top = new THREE.Mesh(new THREE.CircleGeometry(0.66, 20), M.water);
+  top.rotation.x = -Math.PI / 2; top.position.y = 1.68;
+  scene.add(top);
+  colliders.push({ circle: [0, 0, 2.25] });
+})();
+
+/* ---------- billboards: sprites standing in the world ---------- */
+const unit = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
+function billboard(map, w, h, x, z) {
+  const mat = new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, emissive: '#ffffff', emissiveMap: map, emissiveIntensity: 0.3 });
+  const m = new THREE.Mesh(unit, mat);
+  m.scale.set(w, h, 1);
+  m.position.set(x, 0, z);
+  m.castShadow = true;
+  m.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: 0.5 });
+  scene.add(m);
+  billboards.push(m);
+  return m;
+}
+// Sized from the image itself at PX pixels per unit, so every sprite shares one pixel density.
+function prop(name, x, z, collide) {
+  let m = null;
+  const t = tex(name, false, (loaded) => m.scale.set(loaded.image.width / PX, loaded.image.height / PX, 1));
+  m = billboard(t, 1, 1, x, z);
+  if (collide) colliders.push(collide);
+  return m;
+}
+
+prop('fruit_stall', -4.2, -4.6, { box: [-5.9, -5.0, -2.5, -4.2] });
+prop('potion_stall', 0, -4.6, { box: [-1.7, -5.0, 1.7, -4.2] });
+prop('bakery_stall', 4.2, -4.6, { box: [2.5, -5.0, 5.9, -4.2] });
+prop('merchant', -6.6, -3.9, { circle: [-6.6, -3.9, 0.4] });
+prop('barrel', -7.4, -4.9, { circle: [-7.4, -4.9, 0.5] });
+prop('crate', 7.1, -4.9, { circle: [7.1, -4.9, 0.5] });
+prop('sack', 7.6, -3.9, { circle: [7.6, -3.9, 0.4] });
+
+const lampSpots = [[-6.6, -6.6], [6.6, -6.6], [-6.6, 6.6], [6.6, 6.6]];
+for (const [x, z] of lampSpots) {
+  prop('lamp', x, z, { circle: [x, z, 0.3] });
+  const light = new THREE.PointLight('#ffb050', 4, 7, 2);
+  light.position.set(x, 2.3, z);
+  scene.add(light);
+}
+for (const [x, z] of [[-11, 9], [11, 9.5], [-17, 13], [17, 12], [-7, 14], [8, 15], [-19, -6], [19, -7]]) prop('oak', x, z, { circle: [x, z, 0.6] });
+for (const [x, z] of [[-12, -17], [-5, -17.5], [2, -17], [9, -17.5], [15, -16.5], [-18, 2], [18, 3]]) prop('pine', x, z, { circle: [x, z, 0.5] });
+for (const [x, z] of [[-3, 7.2], [3, 7.2], [-10.2, 9.2], [10.2, 8.6], [-9.6, -9.6], [9.6, -9.6]]) prop('bush', x, z, null);
+
+/* ---------- player ---------- */
+let saved = null;
+try { saved = JSON.parse(localStorage.getItem('taproot_character')); } catch (e) {}
+const look = saved && saved.equipment ? saved : { skin: 1, hs: 'short', hc: 1, equipment: { head: 'iron_helm', body: 'steel_armor', rhand: 'iron_sword', lhand: 'wooden_shield' } };
+if (typeof GAME !== 'undefined' && GAME.migrateEquipment) GAME.migrateEquipment(look.equipment);
+const frames = {};
+Object.entries(SPRITE.renderAll(look)).forEach(([k, canvas]) => {
+  const t = new THREE.CanvasTexture(canvas);
+  t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
+  frames[k] = t;
+});
+const PH = 1.75;
+const player = billboard(frames.down_0, PH * SPRITE.W / SPRITE.H, PH, 0, 4.5);
+player.customDepthMaterial.map = frames.down_0;
+
+/* ---------- input & camera ---------- */
+const keys = {};
+addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (e.code === 'KeyQ') yawTarget += Math.PI / 4;
+  if (e.code === 'KeyE') yawTarget -= Math.PI / 4;
+  if (e.code === 'KeyP') togglePixel();
+  if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+let yaw = 0, yawTarget = 0, facing = 'down', walkT = 0, pixel = false;
+function togglePixel() {
+  pixel = !pixel;
+  renderer.setPixelRatio(pixel ? 0.34 : Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.domElement.classList.toggle('pixel', pixel);
+}
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function blocked(x, z) {
+  if (Math.abs(x) > 24 || Math.abs(z) > 24) return true;
+  const r = 0.35;
+  return colliders.some((c) => c.box
+    ? x > c.box[0] - r && x < c.box[2] + r && z > c.box[1] - r && z < c.box[3] + r
+    : Math.hypot(x - c.circle[0], z - c.circle[1]) < c.circle[2] + r);
+}
+
+const clock = new THREE.Clock();
+function update(dt) {
+  const ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  const iy = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
+  const moving = ix || iy;
+  if (moving) {
+    const speed = (keys.ShiftLeft || keys.ShiftRight ? 7.5 : 4.5) * dt, len = Math.hypot(ix, iy);
+    const right = [Math.cos(yaw), -Math.sin(yaw)], fwd = [-Math.sin(yaw), -Math.cos(yaw)];
+    const dx = (right[0] * ix - fwd[0] * iy) / len * speed, dz = (right[1] * ix - fwd[1] * iy) / len * speed;
+    if (!blocked(player.position.x + dx, player.position.z)) player.position.x += dx;
+    if (!blocked(player.position.x, player.position.z + dz)) player.position.z += dz;
+    facing = ix ? (ix > 0 ? 'right' : 'left') : (iy < 0 ? 'up' : 'down');
+    walkT += dt;
+  } else walkT = 0;
+  const f = frames[`${facing}_${moving ? Math.floor(walkT / 0.17) % 2 : 0}`];
+  if (player.material.map !== f) {
+    player.material.map = player.material.emissiveMap = player.customDepthMaterial.map = f;
+    player.material.needsUpdate = true;
+  }
+
+  yaw += (yawTarget - yaw) * Math.min(1, dt * 8);
+  const p = player.position;
+  camera.position.set(p.x + Math.sin(yaw) * 19, 10.5, p.z + Math.cos(yaw) * 19);
+  camera.lookAt(p.x - Math.sin(yaw) * 2, 1.2, p.z - Math.cos(yaw) * 2);
+  for (const b of billboards) b.rotation.y = yaw;
+  sun.target.position.set(p.x, 0, p.z);
+  sun.position.set(p.x - 14, 20, p.z + 10);
+  sun.target.updateMatrixWorld();
+  waterTex.offset.x += dt * 0.04;
+  waterTex.offset.y += dt * 0.02;
+}
+function frame() {
+  update(Math.min(clock.getDelta(), 0.05));
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+// Debug hook: step the world by hand (useful when the tab is in the background).
+window.__city3d = {
+  scene, player, keys,
+  tick(n = 1) { for (let i = 0; i < n; i++) update(1 / 60); renderer.render(scene, camera); },
+};
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

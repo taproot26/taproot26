@@ -17,12 +17,13 @@ HERE = Path(__file__).resolve().parent
 GAME = HERE.parent.parent / "game"
 sys.path.insert(0, str(HERE))
 
-GENERATORS = ["market", "interior", "interior_mart", "monsters", "loot", "coast", "items"]
+GENERATORS = ["market", "interior", "interior_mart", "monsters", "loot", "coast", "items", "city3d"]
 INSTALL = {
     "monsters": ("monsters", GAME / "world/assets/monsters", ["monsters.png", "king_slime.png", "slash.png"]),
     "loot": ("loot", GAME / "world/assets/loot", ["loot.png", "coin.png", "gold.png", "slime_gel.png", "spore_cap.png",
                                                   "bat_fang.png", "goblin_ear.png", "royal_jelly.png"]),
-    "items": ("items", GAME / "assets/items", None),  # None = every icon PNG
+    "items": ("items", GAME / "assets/items", None),  # None = every PNG in the set
+    "city3d": ("city3d", GAME / "city3d/assets", None),
 }
 
 
