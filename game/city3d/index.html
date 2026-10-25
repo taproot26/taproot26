@@ -19,7 +19,7 @@
 <script src="/game/sprite.js"></script>
 </head>
 <body>
-<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">2D city</a><br>WASD / arrows to move, Shift to run &middot; Q / E rotate &middot; P pixel mode</div>
+<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">2D city</a><br>WASD / arrows to move, Shift to run &middot; Q / E rotate &middot; P pixel mode &middot; V 3D / flat player</div>
 <script type="module">
 /* ============================================================================
    Taproot city plaza in Three.js, "HD-2D" style.
@@ -228,7 +228,7 @@ function prop(name, x, z, collide) {
 prop('fruit_stall', -4.2, -4.6, { box: [-5.9, -5.0, -2.5, -4.2] });
 prop('potion_stall', 0, -4.6, { box: [-1.7, -5.0, 1.7, -4.2] });
 prop('bakery_stall', 4.2, -4.6, { box: [2.5, -5.0, 5.9, -4.2] });
-prop('merchant', -6.6, -3.9, { circle: [-6.6, -3.9, 0.4] });
+colliders.push({ circle: [-6.6, -3.9, 0.4] }); // the merchant, voxelised below
 prop('barrel', -7.4, -4.9, { circle: [-7.4, -4.9, 0.5] });
 prop('crate', 7.1, -4.9, { circle: [7.1, -4.9, 0.5] });
 prop('sack', 7.6, -3.9, { circle: [7.6, -3.9, 0.4] });
@@ -244,20 +244,80 @@ for (const [x, z] of [[-11, 9], [11, 9.5], [-17, 13], [17, 12], [-7, 14], [8, 15
 for (const [x, z] of [[-12, -17], [-5, -17.5], [2, -17], [9, -17.5], [15, -16.5], [-18, 2], [18, 3]]) prop('pine', x, z, { circle: [x, z, 0.5] });
 for (const [x, z] of [[-3, 7.2], [3, 7.2], [-10.2, 9.2], [10.2, 8.6], [-9.6, -9.6], [9.6, -9.6]]) prop('bush', x, z, null);
 
+/* ---------- voxel characters: pixel sprites rebuilt as cubes ---------- */
+// Every opaque pixel becomes a cube. Depth grows with distance from the silhouette
+// edge, so heads and bodies come out rounded while swords and straps stay thin.
+// The front half takes the front sprite's colours, the back half the back sprite's.
+function voxelize(front, back, height) {
+  const W = front.width, H = front.height;
+  const F = front.getContext('2d').getImageData(0, 0, W, H).data;
+  const B = back ? back.getContext('2d').getImageData(0, 0, W, H).data : null;
+  const solid = (D, x, y) => x >= 0 && y >= 0 && x < W && y < H && D[(y * W + x) * 4 + 3] > 200;  // skips the soft ground shadow
+  const depth = new Uint8Array(W * H);
+  let top = H, bottom = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!solid(F, x, y)) continue;
+    top = Math.min(top, y); bottom = Math.max(bottom, y);
+    let edge = 8;
+    for (let dy = -8; dy <= 8; dy++) for (let dx = -8; dx <= 8; dx++) if (!solid(F, x + dx, y + dy)) edge = Math.min(edge, Math.hypot(dx, dy));
+    depth[y * W + x] = Math.min(7, Math.max(1, Math.round(edge)));
+  }
+  const reach = (x, y) => (x >= 0 && y >= 0 && x < W && y < H ? depth[y * W + x] : 0);
+  const s = height / (bottom - top + 1);
+  const cells = [];
+  for (let y = top; y <= bottom; y++) for (let x = 0; x < W; x++) {
+    const d = reach(x, y);
+    for (let z = 1 - d; z <= d - 1 && d; z++) {
+      const a = Math.abs(z);
+      const visible = a === d - 1 || reach(x - 1, y) - 1 < a || reach(x + 1, y) - 1 < a || reach(x, y - 1) - 1 < a || reach(x, y + 1) - 1 < a;
+      if (!visible) continue;
+      const bx = W - 1 - x;  // seen from behind, left and right swap
+      const fromBack = z < 0 && B && solid(B, bx, y);
+      const i = (y * W + (fromBack ? bx : x)) * 4, D = fromBack ? B : F, k = z < 0 && !fromBack ? 0.72 : 1;
+      cells.push([x, y, z, D[i] * k, D[i + 1] * k, D[i + 2] * k]);
+    }
+  }
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(s, s, s), new THREE.MeshLambertMaterial(), cells.length);
+  const m4 = new THREE.Matrix4(), col = new THREE.Color();
+  cells.forEach(([x, y, z, r, g, b], i) => {
+    mesh.setMatrixAt(i, m4.makeTranslation((x - W / 2 + 0.5) * s, (bottom - y + 0.5) * s, z * s));
+    mesh.setColorAt(i, col.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace));
+  });
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+new THREE.ImageLoader().load(ASSETS + 'merchant.png', (img) => {
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  c.getContext('2d').drawImage(img, 0, 0);
+  const m = voxelize(c, null, 1.5);
+  m.position.set(-6.6, 0, -3.9);
+  scene.add(m);
+});
+
 /* ---------- player ---------- */
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem('taproot_character')); } catch (e) {}
 const look = saved && saved.equipment ? saved : { skin: 1, hs: 'short', hc: 1, equipment: { head: 'iron_helm', body: 'steel_armor', rhand: 'iron_sword', lhand: 'wooden_shield' } };
 if (typeof GAME !== 'undefined' && GAME.migrateEquipment) GAME.migrateEquipment(look.equipment);
+const sheets = SPRITE.renderAll(look);
 const frames = {};
-Object.entries(SPRITE.renderAll(look)).forEach(([k, canvas]) => {
+Object.entries(sheets).forEach(([k, canvas]) => {
   const t = new THREE.CanvasTexture(canvas);
   t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
   frames[k] = t;
 });
 const PH = 1.75;
-const player = billboard(frames.down_0, PH * SPRITE.W / SPRITE.H, PH, 0, 4.5);
-player.customDepthMaterial.map = frames.down_0;
+const player = new THREE.Group();          // voxel model; two meshes are the two walk frames
+const walk = [voxelize(sheets.down_0, sheets.up_0, PH), voxelize(sheets.down_1, sheets.up_1, PH)];
+walk.forEach((m, i) => { m.visible = i === 0; player.add(m); });
+player.position.set(0, 0, 4.5);
+scene.add(player);
+const flat = billboard(frames.down_0, PH * SPRITE.W / SPRITE.H, PH, 0, 4.5);  // the old flat sprite, on V
+flat.customDepthMaterial.map = frames.down_0;
+flat.visible = false;
+let voxelMode = true, heading = 0;
 
 /* ---------- input & camera ---------- */
 const keys = {};
@@ -266,6 +326,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyQ') yawTarget += Math.PI / 4;
   if (e.code === 'KeyE') yawTarget -= Math.PI / 4;
   if (e.code === 'KeyP') togglePixel();
+  if (e.code === 'KeyV') { voxelMode = !voxelMode; player.visible = voxelMode; flat.visible = !voxelMode; }
   if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -292,6 +353,7 @@ function blocked(x, z) {
 }
 
 const clock = new THREE.Clock();
+let debugCam = null;  // [from, at] pins the camera for inspection; null follows the player
 function update(dt) {
   const ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   const iy = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
@@ -304,17 +366,30 @@ function update(dt) {
     if (!blocked(player.position.x, player.position.z + dz)) player.position.z += dz;
     facing = ix ? (ix > 0 ? 'right' : 'left') : (iy < 0 ? 'up' : 'down');
     walkT += dt;
+    const want = Math.atan2(dx, dz);  // the voxel model faces +Z; turn it toward the walk direction
+    heading += Math.atan2(Math.sin(want - heading), Math.cos(want - heading)) * Math.min(1, dt * 12);
   } else walkT = 0;
-  const f = frames[`${facing}_${moving ? Math.floor(walkT / 0.17) % 2 : 0}`];
-  if (player.material.map !== f) {
-    player.material.map = player.material.emissiveMap = player.customDepthMaterial.map = f;
-    player.material.needsUpdate = true;
+  const step = moving ? Math.floor(walkT / 0.17) % 2 : 0;
+  walk[0].visible = step === 0;
+  walk[1].visible = step === 1;
+  player.rotation.y = heading;
+  player.position.y = moving ? Math.abs(Math.sin(walkT * Math.PI / 0.17)) * 0.05 : 0;
+  flat.position.set(player.position.x, 0, player.position.z);
+  const f = frames[`${facing}_${step}`];
+  if (flat.material.map !== f) {
+    flat.material.map = flat.material.emissiveMap = flat.customDepthMaterial.map = f;
+    flat.material.needsUpdate = true;
   }
 
   yaw += (yawTarget - yaw) * Math.min(1, dt * 8);
   const p = player.position;
-  camera.position.set(p.x + Math.sin(yaw) * 19, 10.5, p.z + Math.cos(yaw) * 19);
-  camera.lookAt(p.x - Math.sin(yaw) * 2, 1.2, p.z - Math.cos(yaw) * 2);
+  if (debugCam) {
+    camera.position.set(...debugCam[0]);
+    camera.lookAt(...debugCam[1]);
+  } else {
+    camera.position.set(p.x + Math.sin(yaw) * 19, 10.5, p.z + Math.cos(yaw) * 19);
+    camera.lookAt(p.x - Math.sin(yaw) * 2, 1.2, p.z - Math.cos(yaw) * 2);
+  }
   for (const b of billboards) b.rotation.y = yaw;
   sun.target.position.set(p.x, 0, p.z);
   sun.position.set(p.x - 14, 20, p.z + 10);
@@ -329,8 +404,9 @@ function frame() {
 }
 // Debug hook: step the world by hand (useful when the tab is in the background).
 window.__city3d = {
-  scene, player, keys,
+  scene, camera, player, keys,
   tick(n = 1) { for (let i = 0; i < n; i++) update(1 / 60); renderer.render(scene, camera); },
+  snap(from, at) { debugCam = from ? [from, at] : null; this.tick(1); },
 };
 requestAnimationFrame(frame);
 </script>
