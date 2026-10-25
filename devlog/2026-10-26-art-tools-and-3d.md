@@ -32,6 +32,7 @@ This log covers a run of sessions that took Taproot the Game from hand-drawn bro
 | Loot: gold coin and per-monster drops | `tools/pixelgen/loot.py` | `... build.py loot` (installs to `game/world/assets/loot/`) |
 | Coastal port tileset, ships, lighthouse | `tools/pixelgen/coast.py` | `... build.py coast` (previews in `tools/pixelgen/out/coast/`) |
 | 24x24 equipment icons (54 items) | `tools/pixelgen/items.py` | `... build.py items` (installs to `game/assets/items/`) |
+| Farm-valley art for the fields (grass, sand, water, trees, cottages, fence) | `tools/pixelgen/valley.py` | `... build.py valley` (installs to `game/world/assets/valley/`) |
 | Textures and billboards for the HD-2D city | `tools/pixelgen/city3d.py` | `... build.py city3d` (installs to `game/city3d/assets/`) |
 | Build everything | `tools/pixelgen/build.py` | `python3 tools/pixelgen/build.py` |
 | **3D scene library** | `game/lib/stylized3d.js` | `import { World, makeHero, ... } from '/game/lib/stylized3d.js'` |
@@ -78,6 +79,8 @@ const golem = makeGolem(W); const fx = new Slashes(W); fx.spawn(x, z, heading, d
 5. **"See it in Three.js".** Claude built an HD-2D plaza (`/game/city3d`). The user asked for 3D player sprites, so the sprite was voxelised: cubes, deeper toward the middle so bodies come out round and swords stay thin, front and back colours, and it turns while walking.
 6. **Reference image (stylized action RPG).** The user wanted a local copy that mimics it, with a more realistic side view of the character. Claude built `/game/yard3d`: lush instanced grass, a cobble road, fences and props, a jointed low-poly hero with walk, sprint, attack and block, orange training golems, crescent slashes, big damage numbers with a yellow TOTAL, and the HP/Stamina/Block panel. The user said "this looks pretty good".
 7. **This session.** Claude added a slice of town around the yard (houses, corner tavern, well, market stalls, lamps, trees), moved every 3D builder into `game/lib/stylized3d.js` so future scenes can reuse it, and wrote this log.
+
+8. **Stardew-style fields.** From a Stardew Valley reference, `valley.py` redraws the fields: seamless 64px grass with leaf tufts, warm sand paths with pebbles and hoe marks, bright water with glints, foam and sandy pond banks, fruit trees, layered pines, log fences, and shingle-roofed cottages. The fields load these PNGs under the old texture keys, so no game logic changed.
 
 ### Decisions worth remembering
 - 2D style is Gen-3 Pokémon with a medieval/pirate theme. Art must be original, never ripped tiles.

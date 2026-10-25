@@ -112,6 +112,8 @@ const SPRITE_H = {
 const PLAYER_SHEET = [[105, 60, 133, 276], [373, 62, 132, 273], [639, 66, 130, 269], [904, 67, 130, 269],
   [101, 409, 131, 270], [366, 409, 130, 270], [641, 412, 128, 270], [907, 414, 127, 271]];
 const PLAYER_DIRS = ['down', 'left', 'right', 'up'];
+const VALLEY = ['grass', 'sand', 'water', 'tree_round', 'tree_pine', 'bush', 'stump_tall', 'stump_short', 'boulder', 'fence', 'fence_post',
+  'house_a', 'house_b', 'flower_white', 'flower_pink', 'flower_yellow', 'flower_blue', 'tall_a', 'tall_b', 'tall_dry'];
 const CHAR_H = 26, CHAR_W = 14;
 
 /* ---------- map data (tile coordinates) ---------- */
@@ -240,28 +242,12 @@ function shrink(src, sx, sy, sw, sh, tw, th, crisp = true) {
   return out;
 }
 
-// Opaque tile -> 2x2 mirrored pattern (mirroring hides the seams) returned as raw pixels.
-function makePattern(clean, [sx, sy, sw, sh], inset, pw, ph) {
-  const tile = shrink(clean, sx + inset, sy + inset, sw - inset * 2, sh - inset * 2, pw, ph, false);
-  const c = canvasOf(pw * 2, ph * 2), x = c.getContext('2d', { willReadFrequently: true });
-  [[0, 0, 1, 1], [pw, 0, -1, 1], [0, ph, 1, -1], [pw, ph, -1, -1]].forEach(([ox, oy, fx, fy]) => {
-    x.save(); x.translate(fx < 0 ? ox + pw : ox, fy < 0 ? oy + ph : oy); x.scale(fx, fy); x.drawImage(tile, 0, 0); x.restore();
-  });
-  return { w: pw * 2, h: ph * 2, data: x.getImageData(0, 0, pw * 2, ph * 2).data };
-}
-
-function sampleAvg(clean, x, y, w, h) {
-  const d = clean.getContext('2d', { willReadFrequently: true }).getImageData(x, y, w, h).data;
-  let r = 0, g = 0, b = 0, n = 0;
-  for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
-  return n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : [110, 190, 70];
-}
-
 function buildTextures(scene) {
   const objects = keyOut(scene.textures.get('sheet_objects').getSourceImage());
   const player = keyOut(scene.textures.get('sheet_player').getSourceImage());
 
   Object.keys(SPRITE_H).forEach((name) => {
+    if (scene.textures.exists(name)) return;
     const [sx, sy, sw, sh] = SHEET[name], th = SPRITE_H[name], tw = Math.round(sw * th / sh);
     scene.textures.addCanvas(name, shrink(objects, sx, sy, sw, sh, tw, th));
   });
@@ -289,11 +275,12 @@ function buildTextures(scene) {
 
   scene.textures.addCanvas('spark', (() => { const c = canvasOf(2, 2); c.getContext('2d').fillStyle = '#fff'; c.getContext('2d').fillRect(0, 0, 2, 2); return c; })());
 
-  return {
-    dirt: sampleAvg(objects, SHEET.dirt[0] + 30, SHEET.dirt[1] + 30, 87, 81),
-    water: makePattern(objects, SHEET.water, 20, 26, 22),
-    fringe: sampleAvg(objects, SHEET.dirt_edge[0] + 70, SHEET.dirt_edge[1] + 12, 30, 6),
+  const pixels = (key) => {
+    const img = scene.textures.get(key).getSourceImage(), c = canvasOf(img.width, img.height), x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    return { w: img.width, h: img.height, data: x.getImageData(0, 0, img.width, img.height).data };
   };
+  return { grass: pixels('grass'), sand: pixels('sand'), water: pixels('water') };
 }
 
 /* ---------- world queries ---------- */
@@ -329,6 +316,8 @@ class Overworld extends Phaser.Scene {
   preload() {
     this.load.image('sheet_objects', '/game/world/assets/objects.webp');
     this.load.image('sheet_player', '/game/world/assets/player.webp');
+    // Farm-valley art from tools/pixelgen/valley.py; these keys replace the cut-outs from objects.webp.
+    VALLEY.forEach((k) => this.load.image(k, `/game/world/assets/valley/${k}.png`));
     this.load.spritesheet('monsters', '/game/world/assets/monsters/monsters.png', { frameWidth: 24, frameHeight: 24 });
     this.load.spritesheet('king', '/game/world/assets/monsters/king_slime.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('slash', '/game/world/assets/monsters/slash.png', { frameWidth: 24, frameHeight: 24 });
@@ -387,12 +376,10 @@ class Overworld extends Phaser.Scene {
     this.addObject('house_b', HOUSE_B.x, HOUSE_B.y, HOUSE_B.w, HOUSE_B.h);
 
     // Fence pieces overlap by one post so a run reads as one continuous fence.
-    const fw = this.textures.get('fence').getSourceImage().width, step = fw - Math.round(fw * 22 / 131);
     FENCES.forEach(([x1, x2, row]) => {
-      const start = x1 * T, end = (x2 + 1) * T;
-      for (let px = start; px < end - 2; px += step) {
-        this.add.image(px, (row + 1) * T, 'fence').setOrigin(0, 1).setDepth((row + 1) * T);
-      }
+      const start = x1 * T, end = (x2 + 1) * T, y = (row + 1) * T + 2;
+      for (let px = start; px < end - 8; px += 16) this.add.image(px, y, 'fence').setOrigin(0, 1).setDepth(y);
+      this.add.image(end - 8, y, 'fence_post').setOrigin(0, 1).setDepth(y);
       this.block(x1, row, x2 - x1 + 1, 1);
       this.marks.push({ key: 'fence', tx: x1, ty: row, w: x2 - x1 + 1, h: 1 });
     });
@@ -422,44 +409,35 @@ class Overworld extends Phaser.Scene {
     const tex = this.textures.createCanvas('ground', w, h);
     const ctx = tex.getContext();
     const img = ctx.createImageData(w, h);
-    const G = ['#50b93d', '#4aaf39', '#58c244', '#54bd41'].map(rgb);
-    const speck = rgb('#7fd85c');
-    const { dirt, water, fringe } = this.pat;
+    const { grass, sand, water } = this.pat;
+    const at = (p, x, y) => { const i = ((y % p.h) * p.w + (x % p.w)) * 4; return [p.data[i], p.data[i + 1], p.data[i + 2]]; };
+    const dim = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
     const murky = (c) => [c[0] * 0.55, c[1] * 0.85, c[2] * 0.7];
+    const LIP = rgb('#32712c'), FOAM = rgb('#d8f6ff'), WET = rgb('#b46a2a'), BANK = rgb('#e8a845');
+    // distance (px, up to 4) from (x, y) to the nearest pixel where test() holds, along the 4 axes
+    const near = (x, y, test) => { for (let d = 1; d <= 6; d++) if (test(x, y - d) || test(x - d, y) || test(x + d, y) || test(x, y + d)) return d; return 9; };
+    const dry = (x, y) => waterAt(x, y) < 0, wet = (x, y) => waterAt(x, y) >= 0;
 
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const r = hash(x, y, 1), patch = vnoise(x, y, 14);
-        let c = r > 0.985 ? speck : r < 0.1 ? (patch > 0.55 ? G[1] : G[3]) : patch > 0.7 ? G[1] : patch < 0.25 ? G[2] : G[0];
+        let c = at(grass, x, y);
         const e = pathEdge(x, y);
-        if (e < 0) {
-          // sand colour from the dirt tile, with scattered pebbles
-          const cell = hash(x >> 2, y >> 2, 71), px = x & 3, py = y & 3;
-          const ox = hash(x >> 2, y >> 2, 74) < 0.5 ? 0 : 1, oy = hash(x >> 2, y >> 2, 75) < 0.5 ? 0 : 1;
-          let k = 1 + (hash(x, y, 72) - 0.5) * 0.1;
-          if (cell > 0.84 && px >= ox && px <= ox + 1 && py >= oy && py <= oy + 1) k *= px === ox && py === oy ? 1.12 : 0.76;
-          else if (cell < 0.05) k *= 1.1;
-          c = [Math.min(255, dirt[0] * k), Math.min(255, dirt[1] * k), Math.min(255, dirt[2] * k)];
-        } else if (e < 0.22) c = hash(x, y, 12) > 0.7 ? dirt : fringe;
+        if (e < 0) c = e > -0.08 ? dim(at(sand, x, y), 0.84) : at(sand, x, y);
+        else if (e < 0.06) c = LIP;
         const wi = waterAt(x, y);
         if (wi >= 0) {
-          const i = ((y % water.h) * water.w + (x % water.w)) * 4;
-          c = [water.data[i], water.data[i + 1], water.data[i + 2]];
+          const d = near(x, y, dry);
+          c = d === 1 ? FOAM : dry(x, y - 2) || dry(x, y - 3) || dry(x, y - 4) ? dim(at(water, x, y), 0.72) : at(water, x, y);
           if (PONDS[wi].murky) c = murky(c);
+        } else {
+          const d = near(x, y, wet);
+          if (d <= 2) c = WET; else if (d <= 6) c = (d === 6 && hash(x, y, 81) > 0.5) ? c : BANK;
         }
         const i = (y * w + x) * 4;
         img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255;
       }
     }
     ctx.putImageData(img, 0, 0);
-
-    for (let cy = 0; cy < MAP_H; cy++) for (let cx = 0; cx < MAP_W; cx++) {
-      if (this.blocked[cy][cx] || hash(cx, cy, 41) > 0.22) continue;
-      const x = cx * T + 3 + Math.floor(hash(cx, cy, 42) * 10), y = cy * T + 5 + Math.floor(hash(cx, cy, 43) * 8);
-      if (pathEdge(x, y) < 0.3 || waterAt(x, y) >= 0) continue;
-      ctx.fillStyle = '#3f9f36';
-      ctx.fillRect(x, y, 1, 1); ctx.fillRect(x - 1, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1);
-    }
     tex.refresh();
     this.add.image(0, 0, 'ground').setOrigin(0).setDepth(0);
   }
