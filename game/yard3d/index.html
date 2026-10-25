@@ -41,13 +41,12 @@
 <div class="help"><a href="/game/">Back</a> &middot; WASD move &middot; Shift sprint &middot; Left click / Space attack &middot; Right click / F block</div>
 <script type="module">
 /* ============================================================================
-   Taproot yard: a small stylized 3D combat test (Three.js, no build step).
-   Everything is procedural: lush instanced grass with wind and a player push,
-   a canvas-painted cobble road, low-poly fences and props, a jointed hero with
-   walk / attack / block animation, training golems, slash VFX and an HP /
-   stamina / block HUD with floating damage numbers.
+   Taproot yard + a slice of town: stylized 3D combat test (Three.js, no build).
+   Scene pieces come from /game/lib/stylized3d.js (grass, roads, fences, props,
+   houses, hero, golems, slash VFX). This page owns the layout, game rules,
+   input, HUD and damage numbers.
    ============================================================================ */
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { THREE, World, makeHero, animateHero, makeGolem, Slashes } from '/game/lib/stylized3d.js';
 
 /* ---------- renderer / scene / light ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -61,474 +60,69 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#9cc4e6');
-scene.fog = new THREE.Fog('#a8c8e4', 28, 58);
+scene.fog = new THREE.Fog('#a8c8e4', 30, 62);
 const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 200);
-
 scene.add(new THREE.HemisphereLight('#dceeff', '#4a6a26', 1.35));
 const sun = new THREE.DirectionalLight('#fff0d2', 3.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 18, bottom: -18, near: 1, far: 60 });
+Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 70 });
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.04;
 scene.add(sun, sun.target);
 
-const rand = (() => { let s = 1337; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
-const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...extra });
-function mesh(geo, mat, parent = scene, x = 0, y = 0, z = 0) {
-  const m = new THREE.Mesh(geo, mat);
-  m.position.set(x, y, z);
-  m.castShadow = m.receiveShadow = true;
-  parent.add(m);
-  return m;
-}
+/* ---------- layout ---------- */
+const W = new World(scene);
+const rand = W.rand;
+W.ground();
+W.road(-30, -14, 30, -7.2);   // main street, north of the yard
+W.road(8.2, -14, 15, 26);     // east street
 
-/* ---------- layout: a fenced yard with a cobble road on the north and east ---------- */
-const ROADS = [[-18, -14, 18, -7.2], [8.2, -14, 15, 16]];  // [x0, z0, x1, z1]
-const onRoad = (x, z, m = 0) => ROADS.some(([x0, z0, x1, z1]) => x > x0 - m && x < x1 + m && z > z0 - m && z < z1 + m);
-const colliders = []; // { c: [x, z, r] } circles or { b: [x0, z0, x1, z1] } boxes
-const solid = (x, z, r) => colliders.some((o) => (o.c
-  ? Math.hypot(x - o.c[0], z - o.c[1]) < o.c[2] + r
-  : x > o.b[0] - r && x < o.b[2] + r && z > o.b[1] - r && z < o.b[3] + r
-    && !(o.gaps || []).some(([gx, gz, gr]) => Math.hypot(x - gx, z - gz) < gr - r)));
+W.fence(-17, -6.6, 7.6, -6.6, [[-0.4, -6.6, 1.3]]);   // the yard, with gates onto both streets
+W.fence(7.6, -6.6, 7.6, 18, [[7.6, 4.2, 1.3]]);
+W.fence(-17, -6.6, -17, 18);
 
-const groundMat = std('#4a7e2a', { roughness: 1 });
-const ground = mesh(new THREE.PlaneGeometry(120, 120), groundMat);
-ground.rotation.x = -Math.PI / 2;
-ground.castShadow = false;
+// town: houses face the street, a corner tavern, a well and two market stalls
+W.house({ x: -24, z: -17.2, w: 5.2, roof: '#b4482e' });
+W.house({ x: -17.4, z: -17.6, w: 5.6, h: 4.4, floors: 2, roof: '#3e5a8a', sign: '#c8a060' });
+W.house({ x: -10.6, z: -17.2, w: 5, roof: '#8a5a32' });
+W.well(-5.4, -16.4);
+W.stall(-1.2, -16.6, '#c8383a');
+W.stall(3.4, -16.6, '#3a6ac8');
+W.house({ x: 18.6, z: -18.4, w: 6.4, d: 5.2, h: 4.6, floors: 2, roof: '#7a2e2a', sign: '#e0b048' });
+W.house({ x: 18.6, z: -7, w: 5, roof: '#a03a3a', facing: -Math.PI / 2 });
+W.house({ x: 18.8, z: 0.6, w: 5.4, h: 4.2, floors: 2, roof: '#4a6a8a', facing: -Math.PI / 2, sign: '#8ac040' });
+W.house({ x: 18.6, z: 8.2, w: 5, roof: '#b4482e', facing: -Math.PI / 2 });
+W.house({ x: 18.6, z: 15.6, w: 5, roof: '#8a5a32', facing: -Math.PI / 2 });
+for (const [x, z, ry] of [[-21, -13.6, Math.PI / 2], [-8, -13.6, Math.PI / 2], [8.6, -13.6, Math.PI / 2], [-12, -7.7, -Math.PI / 2], [14.6, -3, 0], [14.6, 11, 0], [8.7, 20, Math.PI]]) W.lampPost(x, z, ry);
+W.barrel(-20.4, -14.6); W.crate(-13.8, -14.7, 0.8, 0.3); W.barrel(15.9, 4.4); W.crate(15.9, 12.2, 0.7, 0.4);
+for (const [x, z, s] of [[-27, -23, 1.3], [-14, -24, 1.2], [-1, -23, 1.4], [11, -24, 1.2], [26, -22, 1.4], [25, -2, 1.3], [25, 12, 1.2], [24, 23, 1.3], [-21, 4, 1.3], [-24, 14, 1.4]]) W.tree(x, z, s);
 
-function cobbleTexture() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 512;
-  const g = c.getContext('2d');
-  g.fillStyle = '#5a544b';
-  g.fillRect(0, 0, 512, 512);
-  const cell = 32;
-  for (let gy = 0; gy < 16; gy++) for (let gx = 0; gx < 16; gx++) {
-    const cx = gx * cell + cell / 2 + (gy % 2) * cell / 2 + (rand() - 0.5) * 6, cy = gy * cell + cell / 2 + (rand() - 0.5) * 6;
-    const w = cell * 0.4 + rand() * 4, h = cell * 0.36 + rand() * 4, s = 150 + Math.floor(rand() * 45);
-    for (const ox of [-512, 0, 512]) for (const oy of [-512, 0, 512]) {
-      const grd = g.createLinearGradient(cx + ox - w, cy + oy - h, cx + ox + w, cy + oy + h);
-      grd.addColorStop(0, `rgb(${s + 34},${s + 30},${s + 22})`);
-      grd.addColorStop(1, `rgb(${s - 40},${s - 42},${s - 48})`);
-      g.fillStyle = grd;
-      g.beginPath(); g.roundRect(cx + ox - w, cy + oy - h, w * 2, h * 2, 7); g.fill();
-    }
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
-}
-const cobble = cobbleTexture();
-for (const [x0, z0, x1, z1] of ROADS) {
-  const t = cobble.clone();
-  t.repeat.set((x1 - x0) / 3.2, (z1 - z0) / 3.2);
-  t.needsUpdate = true;
-  const road = mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), std('#ffffff', { map: t, roughness: 0.95 }));
-  road.rotation.x = -Math.PI / 2;
-  road.position.set((x0 + x1) / 2, 0.012, (z0 + z1) / 2);
-  road.castShadow = false;
-}
+// the yard itself
+W.barrel(-3.4, -5.6); W.barrel(-2.6, -5.4); W.barrel(-3.0, -5.5, 0.9);
+W.crate(-6.6, -5.4, 0.95, 0.2); W.crate(-6.5, -5.4, 0.75, 0.7, 0.95); W.crate(-5.6, -4.7, 0.7, -0.4);
+W.wheel(-4.6, -4.3);
+W.box(1.6, 0.06, 0.3, W.mat.woodLight, scene, -2.6, 0.08, -3.4).rotation.set(0, 0.5, 0.05);
+W.hayCart(4.6, 6.0);
+W.lampPost(6.7, -5.8);
+const flag = W.banner(2.3, -6.3);
+for (const [x, z, s] of [[-14.5, 13, 1.1], [2, 15.5, 1.2], [-8, 16.5, 1.0]]) W.tree(x, z, s);
 
-/* ---------- grass: ~90k instanced blades that sway in the wind and part around the player ---------- */
-const BLADE_H = 0.32;
-const playerUniform = { value: new THREE.Vector3() }, timeUniform = { value: 0 };
-(function grass() {
-  const g = new THREE.BufferGeometry();
-  const w = 0.058, pts = [[-w, 0], [w, 0], [-w * 0.75, 0.35], [w * 0.75, 0.35], [-w * 0.4, 0.7], [w * 0.4, 0.7], [0, 1]];
-  const pos = [], col = [], nrm = [];
-  const base = new THREE.Color('#477f24'), tip = new THREE.Color('#b6e86c');
-  for (const [x, y] of pts) {
-    pos.push(x, y * BLADE_H, 0);
-    nrm.push(0, 1, 0);  // up-facing normals light the blades like the ground: soft, stylized
-    const c = base.clone().lerp(tip, Math.pow(y, 0.8));
-    col.push(c.r, c.g, c.b);
-  }
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4, 4, 5, 6]);
+W.grass({ x0: -30, z0: -27, x1: 27, z1: 27, count: 150000, avoid: (x, z) => W.solid(x, z, 0.02) });
+W.flowers(60, -17, -6, 7.5, 17);
 
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = timeUniform;
-    shader.uniforms.uPlayer = playerUniform;
-    shader.vertexShader = 'uniform float uTime;\nuniform vec3 uPlayer;\n' + shader.vertexShader.replace('#include <project_vertex>', `
-      vec4 local = vec4(transformed, 1.0);
-      #ifdef USE_INSTANCING
-        local = instanceMatrix * local;
-        vec2 root = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
-      #else
-        vec2 root = vec2(0.0);
-      #endif
-      vec4 wp = modelMatrix * local;
-      float h = clamp(position.y / ${BLADE_H.toFixed(2)}, 0.0, 1.0), h2 = h * h;
-      float wind = sin(uTime * 1.6 + root.x * 0.55 + root.y * 0.35) * 0.13 + sin(uTime * 2.9 + root.x * 1.7 - root.y) * 0.05;
-      wp.x += wind * h2; wp.z += wind * 0.6 * h2;
-      vec2 away = root - uPlayer.xz;
-      float push = (1.0 - smoothstep(0.0, 0.95, length(away))) * h;
-      wp.xz += normalize(away + 0.0001) * push * 0.42;
-      wp.y -= push * 0.22;
-      vec4 mvPosition = viewMatrix * wp;
-      gl_Position = projectionMatrix * mvPosition;`);
-  };
-
-  const spots = [];
-  for (let i = 0; i < 140000 && spots.length < 92000; i++) {
-    const x = -19 + rand() * 34, z = -7 + rand() * 25;
-    if (onRoad(x, z, 0.15)) continue;
-    spots.push([x, z]);
-  }
-  const inst = new THREE.InstancedMesh(g, mat, spots.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
-  const tint = new THREE.Color();
-  spots.forEach(([x, z], i) => {
-    e.set((rand() - 0.5) * 0.22, rand() * Math.PI * 2, (rand() - 0.5) * 0.22);
-    const hs = 0.7 + rand() * 0.6;
-    m4.compose(p.set(x, 0, z), q.setFromEuler(e), s.set(1, hs, 1));
-    inst.setMatrixAt(i, m4);
-    inst.setColorAt(i, tint.setHSL(0.26 + (rand() - 0.5) * 0.04, 0.6 + rand() * 0.15, 0.5 + rand() * 0.08));
-  });
-  inst.receiveShadow = true;
-  inst.frustumCulled = false;
-  scene.add(inst);
-
-  const flowerMat = std('#ff8fb4', { emissive: '#ff5a90', emissiveIntensity: 0.15 });
-  for (let i = 0; i < 46; i++) {
-    const x = -18 + rand() * 25, z = -6 + rand() * 20;
-    if (onRoad(x, z, 0.5)) continue;
-    mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.42, 4), std('#3c7a26'), scene, x, 0.21, z);
-    mesh(new THREE.IcosahedronGeometry(0.07, 0), rand() > 0.3 ? flowerMat : std('#fff2a8'), scene, x, 0.45, z);
-  }
-})();
-
-/* ---------- props ---------- */
-const wood = std('#8a5a32'), woodDark = std('#5e3b20'), woodLight = std('#a8743f'), iron = std('#3c3e46', { roughness: 0.55, metalness: 0.55 });
-
-function fence(x0, z0, x1, z1, gaps = []) {
-  const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.7)), ang = Math.atan2(z1 - z0, x1 - x0);
-  const post = (t) => [x0 + (x1 - x0) * t, z0 + (z1 - z0) * t];
-  const inGap = (x, z) => gaps.some(([gx, gz, r]) => Math.hypot(x - gx, z - gz) < r);
-  for (let i = 0; i <= n; i++) {
-    const [x, z] = post(i / n);
-    if (inGap(x, z)) continue;
-    const p = mesh(new THREE.BoxGeometry(0.17, 1.05, 0.17), wood, scene, x, 0.52, z);
-    p.rotation.set((rand() - 0.5) * 0.08, rand(), (rand() - 0.5) * 0.08);
-    if (i === n) break;
-    const [xn, zn] = post((i + 1) / n), mx = (x + xn) / 2, mz = (z + zn) / 2;
-    if (inGap(mx, mz)) continue;
-    for (const y of [0.42, 0.78]) {
-      const r = mesh(new THREE.BoxGeometry(len / n + 0.1, 0.09, 0.07), y > 0.5 ? woodLight : wood, scene, mx, y, mz);
-      r.rotation.y = -ang;
-      r.rotation.z = (rand() - 0.5) * 0.05;
-    }
-  }
-  const pad = 0.12;
-  colliders.push({ b: [Math.min(x0, x1) - pad, Math.min(z0, z1) - pad, Math.max(x0, x1) + pad, Math.max(z0, z1) + pad], gaps });
-}
-fence(-17, -6.6, 7.6, -6.6, [[-0.4, -6.6, 1.3]]);
-fence(7.6, -6.6, 7.6, 15, [[7.6, 4.2, 1.3]]);
-fence(-17, -6.6, -17, 15);
-
-function barrel(x, z, lying = 0) {
-  const prof = [];
-  for (let i = 0; i <= 8; i++) { const t = i / 8; prof.push(new THREE.Vector2(0.34 + Math.sin(t * Math.PI) * 0.06, t * 0.9)); }
-  const g = new THREE.Group();
-  mesh(new THREE.LatheGeometry(prof, 14), wood, g);
-  for (const y of [0.16, 0.74]) { const b = mesh(new THREE.CylinderGeometry(0.385, 0.385, 0.06, 14, 1, true), iron, g, 0, y, 0); }
-  mesh(new THREE.CircleGeometry(0.34, 14), woodDark, g, 0, 0.9, 0).rotation.x = -Math.PI / 2;
-  g.position.set(x, lying ? 0.36 : 0, z);
-  if (lying) { g.rotation.z = Math.PI / 2; g.rotation.y = lying; g.position.y = 0.4; }
-  scene.add(g);
-  colliders.push({ c: [x, z, 0.42] });
-  return g;
-}
-function crate(x, y, z, s = 0.9, ry = 0) {
-  const g = new THREE.Group();
-  mesh(new THREE.BoxGeometry(s, s, s), woodLight, g);
-  for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {  // dark corner posts
-    mesh(new THREE.BoxGeometry(0.09, s + 0.02, 0.09), woodDark, g, a * (s / 2 - 0.03), 0, b * (s / 2 - 0.03));
-  }
-  for (const k of [-1, 1]) {
-    const brace = mesh(new THREE.BoxGeometry(0.08, s * 1.25, 0.02), woodDark, g, 0, 0, k * (s / 2 + 0.01));
-    brace.rotation.z = 0.78 * k;
-  }
-  g.position.set(x, y + s / 2, z);
-  g.rotation.y = ry;
-  scene.add(g);
-  if (y === 0) colliders.push({ c: [x, z, s * 0.6] });
-}
-function wheel(x, z) {
-  const g = new THREE.Group();
-  mesh(new THREE.TorusGeometry(0.55, 0.08, 6, 20), woodDark, g);
-  mesh(new THREE.TorusGeometry(0.6, 0.03, 4, 20), iron, g);
-  mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.2, 10), iron, g).rotation.x = Math.PI / 2;
-  for (let i = 0; i < 6; i++) {
-    const s = mesh(new THREE.BoxGeometry(0.06, 1.04, 0.05), wood, g);
-    s.rotation.z = (i / 6) * Math.PI;
-  }
-  g.position.set(x, 0.6, z);
-  g.rotation.set(-0.25, 0.6, 0);
-  scene.add(g);
-  colliders.push({ c: [x, z, 0.5] });
-}
-function lampPost(x, z) {
-  const g = new THREE.Group();
-  mesh(new THREE.BoxGeometry(0.2, 3.4, 0.2), woodDark, g, 0, 1.7, 0);
-  mesh(new THREE.BoxGeometry(1.3, 0.14, 0.14), woodDark, g, -0.55, 3.25, 0);
-  const brace = mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), woodDark, g, -0.25, 2.9, 0);
-  brace.rotation.z = -0.78;
-  mesh(new THREE.BoxGeometry(0.03, 0.3, 0.03), iron, g, -1.05, 3.05, 0);
-  mesh(new THREE.BoxGeometry(0.3, 0.42, 0.3), iron, g, -1.05, 2.72, 0);
-  mesh(new THREE.BoxGeometry(0.22, 0.3, 0.32), std('#fff2c0', { emissive: '#ffcc66', emissiveIntensity: 1.6 }), g, -1.05, 2.72, 0);
-  const light = new THREE.PointLight('#ffc470', 6, 6, 2);
-  light.position.set(-1.05, 2.6, 0);
-  g.add(light);
-  g.position.set(x, 0, z);
-  scene.add(g);
-  colliders.push({ c: [x, z, 0.25] });
-}
-function hayCart(x, z) {
-  const g = new THREE.Group();
-  mesh(new THREE.BoxGeometry(2.2, 0.16, 1.4), wood, g, 0, 0.7, 0);
-  for (const k of [-1, 1]) mesh(new THREE.BoxGeometry(2.3, 0.45, 0.1), woodDark, g, 0, 0.98, k * 0.7);
-  const hay = mesh(new THREE.SphereGeometry(1, 14, 10), std('#e2b442', { roughness: 1 }), g, 0, 1.15, 0);
-  hay.scale.set(1.15, 0.62, 0.75);
-  for (const [wx, wz] of [[-0.75, 0.82], [0.75, 0.82], [-0.75, -0.82], [0.75, -0.82]]) {
-    const w = mesh(new THREE.TorusGeometry(0.4, 0.08, 6, 16), woodDark, g, wx, 0.42, wz);
-    mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.14, 8), iron, g, wx, 0.42, wz).rotation.x = Math.PI / 2;
-  }
-  for (const k of [-1, 1]) {
-    const shaft = mesh(new THREE.BoxGeometry(1.6, 0.1, 0.1), wood, g, 1.8, 0.62, k * 0.45);
-    shaft.rotation.z = -0.15;
-  }
-  g.position.set(x, 0, z);
-  g.rotation.y = -0.5;
-  scene.add(g);
-  colliders.push({ c: [x, z, 1.35] });
-}
-function banner(x, z) {
-  mesh(new THREE.CylinderGeometry(0.07, 0.09, 4.2, 8), woodDark, scene, x, 2.1, z);
-  const cloth = mesh(new THREE.PlaneGeometry(0.8, 1.5, 4, 6), std('#2a3a7a', { side: THREE.DoubleSide }), scene, x + 0.42, 3.2, z);
-  cloth.userData.wave = true;
-  colliders.push({ c: [x, z, 0.15] });
-  return cloth;
-}
-function tree(x, z, s = 1) {
-  mesh(new THREE.CylinderGeometry(0.22 * s, 0.32 * s, 2.4 * s, 7), woodDark, scene, x, 1.2 * s, z);
-  const leaf = [std('#2f6a24', { flatShading: true }), std('#3f8a2c', { flatShading: true }), std('#4f9e36', { flatShading: true })];
-  for (let i = 0; i < 6; i++) {
-    const r = (1.0 + rand() * 0.6) * s;
-    mesh(new THREE.IcosahedronGeometry(r, 0), leaf[i % 3], scene, x + (rand() - 0.5) * 1.8 * s, (2.6 + rand() * 1.4) * s, z + (rand() - 0.5) * 1.8 * s);
-  }
-  colliders.push({ c: [x, z, 0.4 * s] });
-}
-
-barrel(-3.4, -5.6); barrel(-2.6, -5.4);
-barrel(-3.0, -5.5).position.y = 0.9;
-crate(-6.6, 0, -5.4, 0.95, 0.2); crate(-6.5, 0.95, -5.4, 0.75, 0.7); crate(-5.6, 0, -4.7, 0.7, -0.4);
-wheel(-4.6, -4.3);
-const plank = mesh(new THREE.BoxGeometry(1.6, 0.06, 0.3), woodLight, scene, -2.6, 0.08, -3.4);
-plank.rotation.set(0, 0.5, 0.05);
-hayCart(4.6, 6.0);
-lampPost(6.7, -5.8);
-const flag = banner(2.3, -6.3);
-for (const [x, z, s] of [[-21, -9, 1.3], [12, 18, 1.4], [10.5, 8.5, 1.2], [-20, 10, 1.4], [-9, 18, 1.2], [18, -2, 1.3], [-14, -10, 1.0]]) tree(x, z, s);
-
-/* ---------- hero: a jointed low-poly character ---------- */
-const skin = std('#f0c4a0'), leather = std('#7a4a2e'), leatherDark = std('#4a2c1a'), cloth = std('#3b3654'),
-  metal = std('#aab4c0', { roughness: 0.4, metalness: 0.6 }), hairMat = std('#f4f4f8', { roughness: 0.6 }),
-  bootMat = std('#2e2420'), gold = std('#e0b048', { roughness: 0.35, metalness: 0.7 }),
-  shieldMat = std('#6a48d8', { roughness: 0.5, metalness: 0.2 }),
-  bladeMat = new THREE.MeshStandardMaterial({ color: '#ffc0ec', emissive: '#ff4ab8', emissiveIntensity: 1.5, roughness: 0.2 });
-
-function makeHero() {
-  const root = new THREE.Group(), hips = new THREE.Group(), J = { hips };
-  hips.position.y = 0.95;
-  root.add(hips);
-  for (const side of [-1, 1]) {
-    const hip = new THREE.Group(), knee = new THREE.Group();
-    hip.position.x = side * 0.11;
-    hips.add(hip);
-    mesh(new THREE.CapsuleGeometry(0.075, 0.28, 4, 8), cloth, hip, 0, -0.2, 0);
-    knee.position.y = -0.43;
-    hip.add(knee);
-    mesh(new THREE.CapsuleGeometry(0.065, 0.28, 4, 8), cloth, knee, 0, -0.19, 0);
-    mesh(new THREE.BoxGeometry(0.14, 0.12, 0.25), bootMat, knee, 0, -0.42, 0.04);
-    J[side < 0 ? 'hipL' : 'hipR'] = hip;
-    J[side < 0 ? 'kneeL' : 'kneeR'] = knee;
-  }
-  const torso = new THREE.Group();
-  hips.add(torso);
-  J.torso = torso;
-  mesh(new THREE.CapsuleGeometry(0.17, 0.3, 4, 10), leather, torso, 0, 0.3, 0).scale.set(1.2, 1, 0.82);
-  mesh(new THREE.BoxGeometry(0.3, 0.22, 0.05), leatherDark, torso, 0, 0.36, 0.13);
-  mesh(new THREE.CylinderGeometry(0.21, 0.22, 0.07, 12), leatherDark, torso, 0, 0.08, 0);
-  mesh(new THREE.BoxGeometry(0.08, 0.07, 0.04), gold, torso, 0, 0.08, 0.2);
-  const neck = new THREE.Group();
-  neck.position.y = 0.62;
-  torso.add(neck);
-  mesh(new THREE.SphereGeometry(0.155, 16, 12), skin, neck, 0, 0.12, 0).scale.set(1, 1.08, 1);
-  for (const sx of [-0.055, 0.055]) mesh(new THREE.BoxGeometry(0.035, 0.045, 0.02), std('#2a2230'), neck, sx, 0.13, 0.148);
-  mesh(new THREE.SphereGeometry(0.168, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat, neck, 0, 0.14, -0.012).rotation.x = -0.25;
-  for (let i = 0; i < 9; i++) {  // spiky white hair
-    const a = (i / 9) * Math.PI * 2;
-    const spike = mesh(new THREE.ConeGeometry(0.055, 0.2, 5), hairMat, neck, Math.sin(a) * 0.1, 0.26 + Math.cos(a) * 0.02, Math.cos(a) * 0.09 - 0.03);
-    spike.rotation.set(-0.6 - Math.cos(a) * 0.6, 0, Math.sin(a) * 0.9);
-  }
-  for (const side of [-1, 1]) {
-    const sh = new THREE.Group(), el = new THREE.Group(), hand = new THREE.Group();
-    sh.position.set(side * 0.27, 0.52, 0);
-    torso.add(sh);
-    mesh(new THREE.SphereGeometry(0.1, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), metal, sh, side * 0.02, 0.02, 0);
-    mesh(new THREE.CapsuleGeometry(0.055, 0.2, 4, 8), leather, sh, 0, -0.15, 0);
-    el.position.y = -0.3;
-    sh.add(el);
-    mesh(new THREE.CapsuleGeometry(0.05, 0.18, 4, 8), skin, el, 0, -0.12, 0);
-    mesh(new THREE.CylinderGeometry(0.063, 0.058, 0.12, 8), leatherDark, el, 0, -0.1, 0);
-    hand.position.y = -0.27;
-    el.add(hand);
-    mesh(new THREE.SphereGeometry(0.056, 8, 6), skin, hand);
-    J[side < 0 ? 'shL' : 'shR'] = sh;
-    J[side < 0 ? 'elL' : 'elR'] = el;
-    J[side < 0 ? 'handL' : 'handR'] = hand;
-  }
-  const sword = new THREE.Group();  // glowing crystal blade, pointing forward out of the fist
-  J.handR.add(sword);
-  mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.18, 6), leatherDark, sword);
-  mesh(new THREE.BoxGeometry(0.2, 0.035, 0.05), gold, sword, 0, 0.1, 0);
-  const blade = mesh(new THREE.CylinderGeometry(0, 0.05, 0.85, 4), bladeMat, sword, 0, 0.54, 0);
-  blade.rotation.y = Math.PI / 4;
-  blade.scale.z = 0.35;
-  sword.rotation.x = Math.PI / 2;
-  const shape = new THREE.Shape();  // kite shield
-  shape.moveTo(0, 0.34);
-  shape.quadraticCurveTo(0.26, 0.32, 0.25, 0.08); shape.quadraticCurveTo(0.2, -0.2, 0, -0.36);
-  shape.quadraticCurveTo(-0.2, -0.2, -0.25, 0.08); shape.quadraticCurveTo(-0.26, 0.32, 0, 0.34);
-  const shield = new THREE.Group();
-  J.elL.add(shield);
-  J.shield = shield;
-  mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: true, bevelSize: 0.025, bevelThickness: 0.02, bevelSegments: 1 }), gold, shield, 0, 0, -0.012).scale.set(1.08, 1.06, 1);
-  mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled: false }), shieldMat, shield);
-  mesh(new THREE.OctahedronGeometry(0.06, 0), gold, shield, 0, 0.04, 0.075);
-  shield.position.set(-0.1, -0.12, 0.02);
-  shield.rotation.y = -Math.PI / 2;
-  root.userData.J = J;
-  scene.add(root);
-  return root;
-}
-const hero = makeHero();
+/* ---------- hero, golems, VFX ---------- */
+const hero = makeHero(W);
 hero.position.set(-2, 0, 2.5);
-
-const lerp = (a, b, t) => a + (b - a) * t;
-const ease = (t) => 1 - Math.pow(1 - t, 3);
+const slashes = new Slashes(W);
 const A = { phase: 0, move: 0, atk: -1, dir: 1, hit: true, block: 0 };
-function animateHero(dt, t) {
-  const J = hero.userData.J, sw = Math.sin(A.phase), m = A.move;
-  J.hipL.rotation.x = sw * 0.75 * m;
-  J.hipR.rotation.x = -sw * 0.75 * m;
-  J.kneeL.rotation.x = Math.max(0, Math.sin(A.phase + 1.3)) * 1.1 * m;
-  J.kneeR.rotation.x = Math.max(0, Math.sin(A.phase + 1.3 + Math.PI)) * 1.1 * m;
-  J.hips.position.y = 0.95 + Math.abs(Math.cos(A.phase)) * 0.05 * m + Math.sin(t * 2.2) * 0.006;
-  J.torso.rotation.x = 0.08 * m;
-  // left arm: swing, or raise the shield in front when blocking
-  J.shL.rotation.x = lerp(-sw * 0.55 * m, -1.25, A.block);
-  J.shL.rotation.y = lerp(0, 0.6, A.block);
-  J.elL.rotation.x = lerp(-0.15, -0.9, A.block);
-  J.shield.rotation.y = lerp(-Math.PI / 2, -0.25, A.block);
-  // right arm: swing, or a sweeping horizontal slash
-  if (A.atk >= 0) {
-    const p = A.atk, d = A.dir;
-    if (p < 0.22) {
-      const k = ease(p / 0.22);
-      J.torso.rotation.y = d * 0.9 * k; J.shR.rotation.x = -1.45 * k; J.shR.rotation.z = d * 0.3 * k;
-    } else if (p < 0.5) {
-      const k = ease((p - 0.22) / 0.28);
-      J.torso.rotation.y = d * (0.9 - 1.95 * k); J.shR.rotation.x = -1.45; J.shR.rotation.z = d * (0.3 - 0.6 * k);
-    } else {
-      const k = ease((p - 0.5) / 0.5);
-      J.torso.rotation.y = d * -1.05 * (1 - k); J.shR.rotation.x = -1.45 * (1 - k); J.shR.rotation.z = d * -0.3 * (1 - k);
-    }
-    J.elR.rotation.x = -0.25;
-  } else {
-    J.torso.rotation.y = lerp(J.torso.rotation.y, 0, Math.min(1, dt * 10));
-    J.shR.rotation.x = sw * 0.55 * m - 0.15;
-    J.shR.rotation.z = 0;
-    J.elR.rotation.x = -0.35;
-  }
-}
-
-/* ---------- golems: training enemies ---------- */
-function makeGolem() {
-  const g = new THREE.Group();
-  const body = std('#ee7a3a'), light = std('#f8964e'), dark = std('#4a2414');
-  const parts = { mats: [body, light] };
-  mesh(new THREE.BoxGeometry(0.66, 0.64, 0.48), body, g, 0, 0.8, 0);
-  const head = mesh(new THREE.BoxGeometry(0.52, 0.46, 0.46), light, g, 0, 1.37, 0.02);
-  for (const sx of [-0.12, 0.12]) mesh(new THREE.BoxGeometry(0.09, 0.07, 0.02), dark, head, sx, 0.02, 0.235);
-  mesh(new THREE.BoxGeometry(0.3, 0.05, 0.02), dark, head, 0, 0.12, 0.235).rotation.z = 0.08;
-  for (const sx of [-1, 1]) {
-    mesh(new THREE.BoxGeometry(0.1, 0.22, 0.1), light, head, sx * 0.3, 0.12, 0).rotation.z = -sx * 0.4;
-    parts[sx < 0 ? 'armL' : 'armR'] = mesh(new THREE.BoxGeometry(0.2, 0.58, 0.2), body, g, sx * 0.46, 0.76, 0);
-    mesh(new THREE.BoxGeometry(0.22, 0.42, 0.24), dark, g, sx * 0.17, 0.22, 0);
-  }
-  scene.add(g);
-  return Object.assign(parts, { g, head });
-}
-const enemies = [[-8, 4.5], [0.5, 8], [-11.5, -1.5]].map(([x, z]) => {
-  const e = makeGolem();
+const enemies = [[-8, 4.5], [0.5, 9], [-11.5, -1.5]].map(([x, z]) => {
+  const e = makeGolem(W);
   e.g.position.set(x, 0, z);
   return Object.assign(e, { hp: 1500, cd: 1, kb: 0, kbx: 0, kbz: 0, flash: 0, wob: 0, combo: 0, comboT: 0, dead: 0, home: [x, z] });
 });
 
-/* ---------- slash VFX, damage numbers ---------- */
-function crescent(R, w, arc) {
-  const pos = [], idx = [], n = 28;
-  for (let i = 0; i <= n; i++) {
-    const t = i / n, a = -arc / 2 + arc * t, th = Math.sin(Math.PI * t);
-    const ri = R - w * th, ro = R + w * th * 0.25;
-    pos.push(Math.sin(a) * ri, 0, Math.cos(a) * ri, Math.sin(a) * ro, 0, Math.cos(a) * ro);
-    if (i < n) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setIndex(idx);
-  return g;
-}
-const slashGeo = [crescent(1.25, 0.34, 2.7), crescent(1.0, 0.18, 2.3)];
-const fx = [];
-function slash(dir) {
-  const grp = new THREE.Group();
-  [['#ffffff', 0], ['#dcffb4', 1]].forEach(([color, i]) => {
-    const m = new THREE.Mesh(slashGeo[i], new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }));
-    grp.add(m);
-  });
-  grp.position.set(hero.position.x, 1.0, hero.position.z);
-  grp.rotation.set(0, hero.rotation.y, 0);
-  grp.scale.x = dir;
-  scene.add(grp);
-  fx.push({ obj: grp, life: 0.24, age: 0, spin: -dir * 0.7 });
-  for (let i = 0; i < 10; i++) {  // sparkles flung along the arc
-    const a = hero.rotation.y + (rand() - 0.5) * 2.4;
-    const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true }));
-    s.position.set(hero.position.x + Math.sin(a) * 1.2, 0.9 + rand() * 0.4, hero.position.z + Math.cos(a) * 1.2);
-    scene.add(s);
-    fx.push({ obj: s, life: 0.45, age: 0, v: [Math.sin(a) * 2.2, 1.2 + rand(), Math.cos(a) * 2.2] });
-  }
-}
-function updateFx(dt) {
-  for (let i = fx.length - 1; i >= 0; i--) {
-    const f = fx[i];
-    f.age += dt;
-    const k = f.age / f.life;
-    if (f.v) { f.obj.position.x += f.v[0] * dt; f.obj.position.y += f.v[1] * dt; f.obj.position.z += f.v[2] * dt; f.v[1] -= 6 * dt; }
-    else { f.obj.rotation.y += f.spin * dt * 4; const s = 0.85 + k * 0.3; f.obj.scale.set(Math.sign(f.obj.scale.x) * s, 1, s); }
-    f.obj.traverse((o) => { if (o.material) o.material.opacity = Math.max(0, 1 - k * k); });
-    if (k >= 1) { scene.remove(f.obj); fx.splice(i, 1); }
-  }
-}
+/* ---------- damage numbers ---------- */
 const labels = [];
 const tmp = new THREE.Vector3();
 function toScreen(x, y, z) {
@@ -552,7 +146,7 @@ function popNumber(e, dmg) {
 }
 
 /* ---------- player stats & HUD ---------- */
-const P = { hp: 1192, hpMax: 1192, st: 100, stMax: 100, stIdle: 0, block: 10, blockT: 0 };
+const P = { hp: 1192, hpMax: 1192, st: 100, stMax: 100, stIdle: 0, block: 10 };
 document.getElementById('blocks').innerHTML = '<i></i>'.repeat(10);
 function hud() {
   document.getElementById('hpTxt').textContent = `${Math.round(P.hp)} / ${P.hpMax}`;
@@ -564,7 +158,8 @@ function hud() {
 
 /* ---------- input ---------- */
 const keys = {};
-let blockHeld = false, mouseGround = new THREE.Vector3(0, 0, 0);
+let blockHeld = false;
+const mouseGround = new THREE.Vector3();
 addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'Space') { e.preventDefault(); attack(false); } });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('contextmenu', (e) => e.preventDefault());
@@ -587,15 +182,18 @@ function attack(aimMouse) {
   P.st -= 10; P.stIdle = 0;
   A.dir = -A.dir;  // alternate swing direction for combos
   A.atk = 0; A.hit = false;
-  slash(A.dir);
+  slashes.spawn(hero.position.x, hero.position.z, hero.rotation.y, A.dir);
 }
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const angleTo = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 
 /* ---------- loop ---------- */
 let time = 0;
 const clock = new THREE.Clock();
 function update(dt) {
   time += dt;
-  timeUniform.value = time;
+  W.uniforms.time.value = time;
   const ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   const iz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
   const moving = !!(ix || iz) && P.hp > 0;
@@ -605,12 +203,9 @@ function update(dt) {
   if (moving) {
     const len = Math.hypot(ix, iz), sp = (sprint ? 6.4 : 3.8) * (blocking ? 0.45 : 1) * (A.atk >= 0 ? 0.4 : 1) * dt;
     const nx = hero.position.x + ix / len * sp, nz = hero.position.z + iz / len * sp;
-    if (!solid(nx, hero.position.z, 0.32)) hero.position.x = nx;
-    if (!solid(hero.position.x, nz, 0.32)) hero.position.z = nz;
-    if (A.atk < 0) {
-      const want = Math.atan2(ix, iz);
-      hero.rotation.y += Math.atan2(Math.sin(want - hero.rotation.y), Math.cos(want - hero.rotation.y)) * Math.min(1, dt * 14);
-    }
+    if (!W.solid(nx, hero.position.z, 0.32)) hero.position.x = nx;
+    if (!W.solid(hero.position.x, nz, 0.32)) hero.position.z = nz;
+    if (A.atk < 0) hero.rotation.y += angleTo(hero.rotation.y, Math.atan2(ix, iz)) * Math.min(1, dt * 14);
   }
   if (blocking && !moving) hero.rotation.y = Math.atan2(mouseGround.x - hero.position.x, mouseGround.z - hero.position.z);
   A.move = lerp(A.move, moving ? (sprint ? 1.25 : 1) : 0, Math.min(1, dt * 10));
@@ -627,8 +222,7 @@ function update(dt) {
       for (const e of enemies) {
         if (e.dead) continue;
         const dx = e.g.position.x - hero.position.x, dz = e.g.position.z - hero.position.z, d = Math.hypot(dx, dz);
-        const off = Math.atan2(Math.sin(Math.atan2(dx, dz) - hero.rotation.y), Math.cos(Math.atan2(dx, dz) - hero.rotation.y));
-        if (d < 2.1 && Math.abs(off) < 1.3) {
+        if (d < 2.1 && Math.abs(angleTo(hero.rotation.y, Math.atan2(dx, dz))) < 1.3) {
           const dmg = Math.round((95 + rand() * 90) * (rand() < 0.15 ? 1.8 : 1));
           e.hp -= dmg; e.flash = 0.09; e.wob = 1;
           e.kb = 0.2; e.kbx = dx / d * 4; e.kbz = dz / d * 4;
@@ -644,7 +238,7 @@ function update(dt) {
     const g = e.g;
     if (e.dead) {
       e.dead -= dt;
-      if (e.dead <= 0) { e.dead = 0; e.hp = 1500; g.visible = true; g.position.set(...[e.home[0], 0, e.home[1]]); }
+      if (e.dead <= 0) { e.dead = 0; e.hp = 1500; g.visible = true; g.position.set(e.home[0], 0, e.home[1]); }
       continue;
     }
     const dx = hero.position.x - g.position.x, dz = hero.position.z - g.position.z, d = Math.hypot(dx, dz);
@@ -653,18 +247,17 @@ function update(dt) {
     else if (d < 6 && d > 1.3 && P.hp > 0) { vx = dx / d * 1.6; vz = dz / d * 1.6; }
     if (vx || vz) {
       const nx = g.position.x + vx * dt, nz = g.position.z + vz * dt;
-      if (!solid(nx, g.position.z, 0.45)) g.position.x = nx;
-      if (!solid(g.position.x, nz, 0.45)) g.position.z = nz;
+      if (!W.solid(nx, g.position.z, 0.45)) g.position.x = nx;
+      if (!W.solid(g.position.x, nz, 0.45)) g.position.z = nz;
     }
     if (d < 8) g.rotation.y = lerp(g.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 6));
     const walk = (vx || vz) && e.kb <= 0 ? Math.sin(time * 8) * 0.4 : 0;
     e.armL.rotation.x = walk; e.armR.rotation.x = -walk;
     e.cd -= dt;
-    if (d < 1.45 && e.cd <= 0 && P.hp > 0) {  // slam attack
+    if (d < 1.45 && e.cd <= 0 && P.hp > 0) {  // slam attack: the shield soaks it if you're blocking and facing it
       e.cd = 1.5;
       e.armR.rotation.x = -1.6;
-      const facing = Math.abs(Math.atan2(Math.sin(Math.atan2(-dx, -dz) - hero.rotation.y), Math.cos(Math.atan2(-dx, -dz) - hero.rotation.y)));
-      if (A.block > 0.6 && facing < 1.2) P.block = Math.max(0, P.block - 2);
+      if (A.block > 0.6 && Math.abs(angleTo(hero.rotation.y, Math.atan2(-dx, -dz))) < 1.2) P.block = Math.max(0, P.block - 2);
       else P.hp = Math.max(0, P.hp - (40 + Math.round(rand() * 20)));
     }
     e.wob = Math.max(0, e.wob - dt * 4);
@@ -680,7 +273,7 @@ function update(dt) {
       }
     }
   }
-  if (P.hp <= 0) {  // knocked out: get back up after a moment
+  if (P.hp <= 0) {  // knocked out: back on your feet after a moment
     P.koT = (P.koT || 0) + dt;
     if (P.koT > 2) { P.hp = P.hpMax; P.koT = 0; hero.position.set(-2, 0, 2.5); }
   }
@@ -694,19 +287,23 @@ function update(dt) {
     if (k >= 1) { l.el.remove(); labels.splice(i, 1); }
   }
 
-  animateHero(dt, time);
-  updateFx(dt);
-  playerUniform.value.set(hero.position.x, 0, hero.position.z);
+  animateHero(hero, A, dt, time);
+  slashes.update(dt);
+  W.uniforms.player.value.set(hero.position.x, 0, hero.position.z);
   reticle.position.set(mouseGround.x, 0.03, mouseGround.z);
   flag.rotation.y = Math.sin(time * 2.1) * 0.18;
   const tx = hero.position.x, tz = hero.position.z;
-  camera.position.lerp(tmp.set(tx, 8.4, tz + 6.2), Math.min(1, dt * 6));
-  camera.lookAt(camera.position.x, 0.7, camera.position.z - 6.2);
+  if (debugCam) { camera.position.set(...debugCam[0]); camera.lookAt(...debugCam[1]); }
+  else {
+    camera.position.lerp(tmp.set(tx, 8.4, tz + 6.2), Math.min(1, dt * 6));
+    camera.lookAt(camera.position.x, 0.7, camera.position.z - 6.2);
+  }
   sun.position.set(tx + 9, 16, tz + 7);
   sun.target.position.set(tx, 0, tz);
   sun.target.updateMatrixWorld();
   hud();
 }
+let debugCam = null;
 function frame() {
   update(Math.min(clock.getDelta(), 0.05));
   renderer.render(scene, camera);
@@ -714,8 +311,12 @@ function frame() {
 }
 camera.position.set(hero.position.x, 8.4, hero.position.z + 6.2);
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
-// Debug hook for stepping the scene by hand (when the tab isn't animating).
-window.__yard = { hero, enemies, keys, A, P, attack, tick(n = 1) { for (let i = 0; i < n; i++) update(1 / 60); renderer.render(scene, camera); }, camera };
+// Debug hook: step the scene by hand and pin the camera (handy when the tab isn't animating).
+window.__yard = {
+  hero, enemies, keys, A, P, attack, world: W,
+  tick(n = 1) { for (let i = 0; i < n; i++) update(1 / 60); renderer.render(scene, camera); },
+  snap(from, at) { debugCam = from ? [from, at] : null; this.tick(1); },
+};
 requestAnimationFrame(frame);
 </script>
 </body>
