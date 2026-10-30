@@ -112,46 +112,140 @@ const SPRITE_H = {
 const PLAYER_SHEET = [[105, 60, 133, 276], [373, 62, 132, 273], [639, 66, 130, 269], [904, 67, 130, 269],
   [101, 409, 131, 270], [366, 409, 130, 270], [641, 412, 128, 270], [907, 414, 127, 271]];
 const PLAYER_DIRS = ['down', 'left', 'right', 'up'];
-const VALLEY = ['grass', 'sand', 'water', 'tree_round', 'tree_pine', 'bush', 'stump_tall', 'stump_short', 'boulder', 'fence', 'fence_post',
-  'house_a', 'house_b', 'flower_white', 'flower_pink', 'flower_yellow', 'flower_blue', 'tall_a', 'tall_b', 'tall_dry'];
+const VALLEY = ['grass', 'sand', 'water', 'forest', 'beach', 'tree_round', 'tree_pine', 'tree_oak', 'bush', 'stump_tall', 'stump_short', 'boulder',
+  'fence', 'fence_post', 'house_a', 'house_b', 'flower_white', 'flower_pink', 'flower_yellow', 'flower_blue', 'tall_a', 'tall_b', 'tall_dry',
+  'fern', 'log', 'mushrooms'];
+// Port art from tools/pixelgen/coast.py (the dock tiles are 16x16 and painted into the ground).
+const COAST = ['dock', 'dock_edge_s', 'dock_side_w', 'dock_side_e', 'quay_top', 'quay_face', 'tavern', 'lighthouse', 'pirate_ship', 'sloop',
+  'rowboat', 'palm', 'barrel', 'crate', 'sack', 'cannon', 'rope_coil', 'anchor', 'chest', 'bollard', 'buoy', 'crab', 'seagull'];
 const CHAR_H = 26, CHAR_W = 14;
 
-/* ---------- map data (tile coordinates) ---------- */
-// [x1, y1, x2, y2, radius] capsules that form the dirt paths
-const PATHS = [
-  [38.5, 7.3, 38.5, 10.5, 1.4], [38.5, 10.5, 34, 12.2, 1.5], [34, 12.2, 28, 13.2, 1.7],
-  [28, 13.2, 24.5, 16.5, 2.0], [24.5, 16.5, 24.5, 21, 2.4], [24.5, 21, 25.5, 22.5, 2.2],
-  [0, 19, 6, 19.5, 2.6], [6, 19.5, 10, 23.5, 2.4], [10, 23.5, 16, 28, 2.3], [16, 28, 20, 33, 2.4], [20, 33, 21, 36, 2.4],
-  [24.5, 21, 20, 25, 2.0], [20, 25, 16, 28, 2.0],
-  [4, 15.5, 8, 14.6, 1.4], [8, 14.6, 13, 13.5, 1.5], [13, 13.5, 17, 11, 1.6],
-];
-const PONDS = [
-  { cx: 5.5, cy: 5.6, rx: 5.6, ry: 3.5 },
-  { cx: 0.5, cy: 32.2, rx: 5.2, ry: 4.4 },
-  { cx: 47.5, cy: 33.5, rx: 5.2, ry: 4.6, murky: true },
-];
-const TALL = [[11, 15, 21, 23, 'g'], [34, 15, 44, 23, 'g'], [28, 3, 35, 9, 'g'], [24, 28, 29, 33, 'g'], [10, 30, 14, 33, 'd'], [2, 22, 6, 26, 'd']]; // x1,y1,x2,y2,type
-const HOUSE_A = { x: 36, y: 3, w: 5, h: 4 };
-const HOUSE_B = { x: 2, y: 12, w: 4, h: 3 };
-const START = { x: 24, y: 19 };
-const BUSHES = [[10, 11], [2, 17], [44, 9], [45, 20], [7, 28], [9, 30], [8, 33], [11, 29], [6, 31], [36, 34], [39, 33], [43, 27], [14, 22], [27, 10]];
-const STUMPS = [[22, 8, 'tall'], [31, 18, 'short'], [8, 20, 'short'], [41, 12, 'tall'], [18, 30, 'short']];
-const FLOWERS = [[15, 5], [10, 9], [1, 22], [3, 17], [7, 31], [34, 28], [37, 29], [40, 28], [45, 9], [46, 19], [30, 30], [19, 27], [15, 31], [33, 10], [27, 10], [4, 25], [12, 16]];
-const TREES = [];
-for (let x = 0; x < MAP_W; x += 2) TREES.push([x, 0]);
-[13, 15, 17, 19, 21, 23, 25, 44, 46].forEach((x) => TREES.push([x, 2]));
-[[33, 2], [44, 4], [46, 4], [46, 8], [46, 10], [12, 4], [0, 10], [0, 12], [2, 9], [0, 14], [0, 23], [0, 25], [2, 24], [9, 17], [22, 9],
- [46, 15], [46, 25], [46, 22], [32, 32], [35, 31], [38, 32], [7, 34], [9, 34], [11, 34], [13, 34], [15, 34], [8, 32], [12, 31],
- [44, 6], [46, 6], [18, 5], [16, 8], [20, 10], [32, 17], [31, 22], [33, 23], [27, 2], [29, 1], [30, 28], [20, 29]]
-  .forEach((t) => TREES.push(t));
-for (let x = 25; x < MAP_W; x += 2) TREES.push([x, 34]);
-// Opening in the top tree wall that lines up with the city's south gate.
-const NORTH_GATE = [22, 25];
+/* ---------- areas (tile coordinates) ----------
+   One page serves every outdoor area: /game/world/?area=woods. Each area lists
+   its paths ([x1, y1, x2, y2, radius] sand capsules), ponds, tall-grass rects
+   (x1, y1, x2, y2, 'g' | 'd'), objects, exits and where you arrive from each
+   neighbour. City (east gate) <-> woods <-> docks; the fields sit south of the city. */
+const borderTrees = (edges) => {
+  const t = [];
+  if (edges.includes('n')) for (let x = 0; x < MAP_W; x += 2) t.push([x, 0]);
+  if (edges.includes('s')) for (let x = 0; x < MAP_W; x += 2) t.push([x, MAP_H - 2]);
+  if (edges.includes('w')) for (let y = 2; y < MAP_H - 2; y += 2) t.push([0, y]);
+  if (edges.includes('e')) for (let y = 2; y < MAP_H - 2; y += 2) t.push([MAP_W - 2, y]);
+  return t;
+};
+const AREAS = {
+  fields: {
+    title: 'Taproot Fields',
+    paths: [
+      [38.5, 7.3, 38.5, 10.5, 1.4], [38.5, 10.5, 34, 12.2, 1.5], [34, 12.2, 28, 13.2, 1.7],
+      [28, 13.2, 24.5, 16.5, 2.0], [24.5, 16.5, 24.5, 21, 2.4], [24.5, 21, 25.5, 22.5, 2.2],
+      [0, 19, 6, 19.5, 2.6], [6, 19.5, 10, 23.5, 2.4], [10, 23.5, 16, 28, 2.3], [16, 28, 20, 33, 2.4], [20, 33, 21, 36, 2.4],
+      [24.5, 21, 20, 25, 2.0], [20, 25, 16, 28, 2.0],
+      [4, 15.5, 8, 14.6, 1.4], [8, 14.6, 13, 13.5, 1.5], [13, 13.5, 17, 11, 1.6],
+    ],
+    ponds: [
+      { cx: 5.5, cy: 5.6, rx: 5.6, ry: 3.5 },
+      { cx: 0.5, cy: 32.2, rx: 5.2, ry: 4.4 },
+      { cx: 47.5, cy: 33.5, rx: 5.2, ry: 4.6, murky: true },
+    ],
+    tall: [[11, 15, 21, 23, 'g'], [34, 15, 44, 23, 'g'], [28, 3, 35, 9, 'g'], [24, 28, 29, 33, 'g'], [10, 30, 14, 33, 'd'], [2, 22, 6, 26, 'd']],
+    objects: [['house_a', 36, 3, 5, 4], ['house_b', 2, 12, 4, 3]],
+    start: { x: 24, y: 19 },
+    bushes: [[10, 11], [2, 17], [44, 9], [45, 20], [7, 28], [9, 30], [8, 33], [11, 29], [6, 31], [36, 34], [39, 33], [43, 27], [14, 22], [27, 10]],
+    stumps: [[22, 8, 'tall'], [31, 18, 'short'], [8, 20, 'short'], [41, 12, 'tall'], [18, 30, 'short']],
+    flowers: [[15, 5], [10, 9], [1, 22], [3, 17], [7, 31], [34, 28], [37, 29], [40, 28], [45, 9], [46, 19], [30, 30], [19, 27], [15, 31], [33, 10], [27, 10], [4, 25], [12, 16]],
+    trees: (() => {
+      const t = borderTrees('n');
+      [13, 15, 17, 19, 21, 23, 25, 44, 46].forEach((x) => t.push([x, 2]));
+      [[33, 2], [44, 4], [46, 4], [46, 8], [46, 10], [12, 4], [0, 10], [0, 12], [2, 9], [0, 14], [0, 23], [0, 25], [2, 24], [9, 17], [22, 9],
+       [46, 15], [46, 25], [46, 22], [32, 32], [35, 31], [38, 32], [7, 34], [9, 34], [11, 34], [13, 34], [15, 34], [8, 32], [12, 31],
+       [44, 6], [46, 6], [18, 5], [16, 8], [20, 10], [32, 17], [31, 22], [33, 23], [27, 2], [29, 1], [30, 28], [20, 29]].forEach((p) => t.push(p));
+      for (let x = 25; x < MAP_W; x += 2) t.push([x, 34]);
+      return t;
+    })(),
+    treeKind: (x, y) => (hash(x, y, 61) > 0.3 ? 'tree_pine' : 'tree_round'),
+    fences: [[40, 47, 13], [26, 39, 25], [41, 47, 25]], // x1, x2, row
+    exits: [{ edge: 'n', range: [22, 25], href: '/game/city/?from=world' }], // lines up with the city's south gate
+    arrive: { city: { x: 23.5, y: 1 } },
+    spawn: ['slime', 'slime', 'slime', 'slime', 'shroom', 'shroom', 'shroom', 'bat', 'bat', 'goblin', 'goblin', 'king'],
+  },
+
+  woods: {
+    title: 'Taproot Woods',
+    ground: 'forest',
+    paths: [
+      [48, 17.5, 41, 16.5, 1.3], [41, 16.5, 33, 18.5, 1.1], [33, 18.5, 25, 17, 1.1], [25, 17, 17, 19.5, 1.1],
+      [17, 19.5, 8, 18.5, 1.1], [8, 18.5, 0, 18.5, 1.3],
+      [25, 17, 27.5, 14.5, 0.8], [17, 19.5, 14.5, 13, 0.8], [33, 18.5, 36, 25, 0.8],
+    ],
+    ponds: [{ cx: 12.5, cy: 9.5, rx: 4.2, ry: 2.8 }, { cx: 40, cy: 28.5, rx: 4.6, ry: 3.1, murky: true }],
+    tall: [[20, 4, 25, 8, 'g'], [5, 24, 11, 29, 'g'], [36, 6, 42, 11, 'g'], [26, 23, 31, 28, 'g'], [16, 28, 21, 31, 'd']],
+    objects: [['house_b', 26, 11, 4, 3], ['log', 31, 13, 2, 1], ['log', 20, 21, 2, 1], ['log', 44, 21, 2, 1]],
+    clearings: [[28, 13, 5], [12.5, 9.5, 6.5], [40, 28.5, 6.5], [36, 25, 3]], // cx, cy, r: kept free of trees
+    start: { x: 44, y: 17 },
+    bushes: [[24, 10], [32, 10], [9, 14], [38, 21], [22, 25], [6, 21], [44, 12]],
+    stumps: [[30, 15, 'short'], [24, 14, 'tall'], [33, 12, 'short'], [18, 15, 'short']],
+    flowers: [[29, 16], [11, 13], [38, 24], [21, 22], [8, 22]],
+    trees: (() => {
+      const t = borderTrees('nsew');
+      for (let y = 2; y < MAP_H - 3; y += 2) for (let x = 2; x < MAP_W - 3; x += 2) {
+        if (hash(x, y, 91) < 0.85) t.push([x + (hash(x, y, 92) > 0.5 ? 1 : 0), y + (hash(x, y, 93) > 0.6 ? 1 : 0)]);
+      }
+      return t;
+    })(),
+    treeKind: (x, y) => { const r = hash(x, y, 61); return r < 0.5 ? 'tree_oak' : r < 0.96 ? 'tree_pine' : 'tree_round'; },
+    decor: { fern: 70, mushrooms: 22 },
+    exits: [
+      { edge: 'e', range: [16, 19], href: '/game/city/?from=woods' },
+      { edge: 'w', range: [17, 20], href: '/game/world/?area=docks&from=woods' },
+    ],
+    arrive: { city: { x: 46.5, y: 17.5 }, docks: { x: 1.5, y: 18.5 } },
+    spawn: ['shroom', 'shroom', 'shroom', 'shroom', 'bat', 'bat', 'bat', 'goblin', 'goblin', 'goblin', 'slime'],
+  },
+
+  docks: {
+    title: 'Taproot Docks',
+    beach: (x, y) => y > 6.5 + Math.sin(x * 0.4) * 0.8, // tile coords: grass above, beach below
+    sea: (x, y) => (x >= 13 && x < 35 ? y >= 22 : y > 22.2 + Math.sin(x * 0.33) * 0.9 + Math.sin(x * 0.9 + 1) * 0.35), // flush under the quay
+    planks: [[13, 19, 34, 22, 'quay'], [19, 22, 21, 31, 'dock'], [29, 22, 30, 28, 'dock']], // x1, y1, x2, y2 (inclusive)
+    paths: [[48, 17.5, 38, 17, 1.4], [38, 17, 27, 17.8, 1.3], [27, 17.8, 20, 17, 1.3]],
+    ponds: [],
+    tall: [[3, 2, 9, 5, 'g'], [30, 2, 37, 5, 'g']],
+    objects: [
+      ['tavern', 16, 14, 4, 2], ['house_b', 24, 14, 4, 2], ['lighthouse', 41, 18, 2, 2],
+      ['pirate_ship', 31, 25, 6, 4], ['sloop', 9, 27, 3, 2], ['rowboat', 24, 27, 2, 1],
+      ['palm', 4, 10, 2, 1], ['palm', 9, 15, 2, 1], ['palm', 36, 10, 2, 1], ['palm', 45, 12, 2, 1], ['palm', 2, 19, 2, 1], ['palm', 38, 21, 2, 1],
+      ['barrel', 14, 16, 1, 1], ['crate', 15, 16, 1, 1], ['sack', 22, 16, 1, 1], ['barrel', 29, 16, 1, 1],
+      ['barrel', 14, 20, 1, 1], ['crate', 33, 20, 1, 1], ['cannon', 26, 20, 2, 1], ['rope_coil', 23, 20, 1, 1],
+      ['anchor', 11, 19, 1, 1], ['chest', 6, 13, 1, 1],
+      ['bollard', 16, 21, 1, 1], ['bollard', 24, 21, 1, 1], ['bollard', 28, 21, 1, 1], ['bollard', 32, 21, 1, 1],
+      ['buoy', 43, 28, 1, 1], ['buoy', 5, 32, 1, 1], ['buoy', 26, 33, 1, 1],
+    ],
+    start: { x: 44, y: 17 },
+    bushes: [[12, 3], [26, 4], [41, 4], [18, 5]],
+    stumps: [],
+    flowers: [[14, 4], [22, 3], [44, 4]],
+    trees: borderTrees('n'),
+    treeKind: (x, y) => (hash(x, y, 61) > 0.5 ? 'tree_pine' : 'tree_oak'),
+    critters: [['crab', 8, 20], ['crab', 36, 20], ['crab', 4, 21], ['seagull', 0, 26], ['seagull', 0, 31]],
+    exits: [{ edge: 'e', range: [16, 19], href: '/game/world/?area=woods&from=docks' }],
+    arrive: { woods: { x: 46.5, y: 17.5 } },
+    spawn: ['slime', 'slime', 'slime', 'goblin', 'goblin', 'goblin'],
+  },
+};
+const AREA = new URLSearchParams(location.search).get('area');
+const A = AREAS[AREA] || AREAS.fields;
+const { paths: PATHS, ponds: PONDS, tall: TALL, start: START, bushes: BUSHES, stumps: STUMPS, flowers: FLOWERS,
+  trees: TREES, fences: FENCES = [], spawn: SPAWN_LIST } = A;
+const PLANKS = A.planks || [];
+// No border trees in front of an exit.
 for (let i = TREES.length - 1; i >= 0; i--) {
   const [tx, ty] = TREES[i];
-  if (ty <= 2 && tx >= NORTH_GATE[0] - 1 && tx <= NORTH_GATE[1] + 1) TREES.splice(i, 1);
+  const open = A.exits.some(({ edge, range: [a, b] }) =>
+    edge === 'n' ? ty <= 2 && tx >= a - 2 && tx <= b + 1 : edge === 's' ? ty >= MAP_H - 3 && tx >= a - 2 && tx <= b + 1
+      : (edge === 'w' ? tx <= 2 : tx >= MAP_W - 4) && ty >= a - 2 && ty <= b + 1);
+  if (open) TREES.splice(i, 1);
 }
-const FENCES = [[40, 47, 13], [26, 39, 25], [41, 47, 25]]; // x1, x2, row
 
 /* ---------- monsters (sprites from tools/pixelgen/monsters.py) ---------- */
 const MONSTERS = {
@@ -166,7 +260,6 @@ const LOOT = {
   slime_gel: { name: 'Slime Gel', frame: 0 }, spore_cap: { name: 'Spore Cap', frame: 1 }, bat_fang: { name: 'Bat Fang', frame: 2 },
   goblin_ear: { name: 'Goblin Ear', frame: 3 }, royal_jelly: { name: 'Royal Jelly', frame: 4 },
 };
-const SPAWN_LIST = ['slime', 'slime', 'slime', 'slime', 'shroom', 'shroom', 'shroom', 'bat', 'bat', 'goblin', 'goblin', 'king'];
 const FIELD_KEY = 'taproot_field'; // local XP, kills, gold and bag
 
 /* ---------- tiny helpers ---------- */
@@ -280,7 +373,10 @@ function buildTextures(scene) {
     x.drawImage(img, 0, 0);
     return { w: img.width, h: img.height, data: x.getImageData(0, 0, img.width, img.height).data };
   };
-  return { grass: pixels('grass'), sand: pixels('sand'), water: pixels('water') };
+  const pat = {};
+  ['grass', 'sand', 'water', 'forest', 'beach', 'dock', 'dock_edge_s', 'dock_side_w', 'dock_side_e', 'quay_top', 'quay_face']
+    .forEach((k) => { if (scene.textures.exists(k)) pat[k] = pixels(k); });
+  return pat;
 }
 
 /* ---------- world queries ---------- */
@@ -296,13 +392,25 @@ function pathEdge(x, y) {
   for (const s of PATHS) best = Math.min(best, distSeg(tx, ty, s) - s[4]);
   return best + (hash(x >> 2, y >> 2, 3) - 0.5) * 0.35 + (hash(x, y, 9) - 0.5) * 0.08;
 }
+// pixel coords -> index of the plank rect (dock or quay) under it, topmost first, or -1
+function plankAt(x, y) {
+  const tx = x / T, ty = y / T;
+  for (let i = PLANKS.length - 1; i >= 0; i--) {
+    const [x1, y1, x2, y2] = PLANKS[i];
+    if (tx >= x1 && tx < x2 + 1 && ty >= y1 && ty < y2 + 1) return i;
+  }
+  return -1;
+}
+// pixel coords -> pond index, PONDS.length for open sea, or -1 for dry land (docks count as dry)
 function waterAt(x, y) {
+  if (PLANKS.length && plankAt(x, y) >= 0) return -1;
   const tx = x / T, ty = y / T;
   for (let i = 0; i < PONDS.length; i++) {
     const p = PONDS[i];
     const d = ((tx - p.cx) / p.rx) ** 2 + ((ty - p.cy) / p.ry) ** 2 + (hash(x >> 2, y >> 2, 5) - 0.5) * 0.16;
     if (d < 1) return i;
   }
+  if (A.sea && A.sea(tx + (hash(x >> 2, y >> 2, 6) - 0.5) * 0.2, ty)) return PONDS.length;
   return -1;
 }
 const SAMPLES = [[2, 2], [8, 2], [14, 2], [2, 8], [8, 8], [14, 8], [2, 14], [8, 14], [14, 14]];
@@ -318,6 +426,7 @@ class Overworld extends Phaser.Scene {
     this.load.image('sheet_player', '/game/world/assets/player.webp');
     // Farm-valley art from tools/pixelgen/valley.py; these keys replace the cut-outs from objects.webp.
     VALLEY.forEach((k) => this.load.image(k, `/game/world/assets/valley/${k}.png`));
+    if (PLANKS.length || A.critters) COAST.forEach((k) => this.load.image(k, `/game/world/assets/coast/${k}.png`));
     this.load.spritesheet('monsters', '/game/world/assets/monsters/monsters.png', { frameWidth: 24, frameHeight: 24 });
     this.load.spritesheet('king', '/game/world/assets/monsters/king_slime.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('slash', '/game/world/assets/monsters/slash.png', { frameWidth: 24, frameHeight: 24 });
@@ -334,6 +443,8 @@ class Overworld extends Phaser.Scene {
     this.placeGrassAndFlowers();
     this.addCharacters();
     this.addSparkles();
+    this.addCritters();
+    document.title = A.title;
     this.buildMinimap();
     this.setupCombat();
 
@@ -372,8 +483,12 @@ class Overworld extends Phaser.Scene {
   placeObjects() {
     for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (isWaterCell(x, y)) this.blocked[y][x] = true;
 
-    this.addObject('house_a', HOUSE_A.x, HOUSE_A.y, HOUSE_A.w, HOUSE_A.h);
-    this.addObject('house_b', HOUSE_B.x, HOUSE_B.y, HOUSE_B.w, HOUSE_B.h);
+    // A quay's bottom row is its stone face: a wall, except where a pier runs off it.
+    PLANKS.forEach(([x1, , x2, y2, kind]) => {
+      if (kind !== 'quay') return;
+      for (let x = x1; x <= x2; x++) if (!PLANKS.some(([a, b, c, d, k]) => k === 'dock' && x >= a && x <= c && y2 >= b && y2 <= d)) this.blocked[y2][x] = true;
+    });
+    A.objects.forEach(([key, x, y, w, h]) => this.addObject(key, x, y, w, h));
 
     // Fence pieces overlap by one post so a run reads as one continuous fence.
     FENCES.forEach(([x1, x2, row]) => {
@@ -384,8 +499,11 @@ class Overworld extends Phaser.Scene {
       this.marks.push({ key: 'fence', tx: x1, ty: row, w: x2 - x1 + 1, h: 1 });
     });
 
+    const cleared = (x, y) => (A.clearings || []).some(([cx, cy, r]) => Math.hypot(x + 1 - cx, y + 1 - cy) < r)
+      || TALL.some(([x1, y1, x2, y2]) => x + 1 >= x1 && x <= x2 && y + 1 >= y1 && y <= y2)
+      || Math.hypot(x + 1 - START.x, y + 1 - START.y) < 3;
     TREES.forEach(([x, y]) => {
-      if (this.isFree(x, y, 2, 2)) this.addObject(hash(x, y, 61) > 0.3 ? 'tree_pine' : 'tree_round', x, y, 2, 2);
+      if (this.isFree(x, y, 2, 2) && (x <= 1 || y <= 1 || x >= MAP_W - 3 || y >= MAP_H - 3 || !cleared(x, y))) this.addObject(A.treeKind(x, y), x, y, 2, 2);
     });
     BUSHES.forEach(([x, y]) => { if (this.isFree(x, y, 1, 1, 0.3)) this.addObject('bush', x, y, 1, 1); });
     STUMPS.forEach(([x, y, k]) => { if (this.isFree(x, y, 1, 1, 0.3)) this.addObject(k === 'tall' ? 'stump_tall' : 'stump_short', x, y, 1, 1); });
@@ -409,18 +527,25 @@ class Overworld extends Phaser.Scene {
     const tex = this.textures.createCanvas('ground', w, h);
     const ctx = tex.getContext();
     const img = ctx.createImageData(w, h);
-    const { grass, sand, water } = this.pat;
+    const { sand, water, beach } = this.pat, grass = this.pat[A.ground || 'grass'];
+    const land = (x, y) => (A.beach && A.beach(x / T, y / T) ? beach : grass);
+    // Dock tiles: piers get side and end pieces, a quay's last row is its stone face.
+    const plankTile = (x, y, i) => {
+      const [x1, , x2, y2, kind] = PLANKS[i], cx = Math.floor(x / T), cy = Math.floor(y / T);
+      if (kind === 'quay') return this.pat[cy === y2 ? 'quay_face' : 'quay_top'];
+      return this.pat[cy === y2 ? 'dock_edge_s' : cx === x1 ? 'dock_side_w' : cx === x2 ? 'dock_side_e' : 'dock'];
+    };
     const at = (p, x, y) => { const i = ((y % p.h) * p.w + (x % p.w)) * 4; return [p.data[i], p.data[i + 1], p.data[i + 2]]; };
     const dim = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
     const murky = (c) => [c[0] * 0.55, c[1] * 0.85, c[2] * 0.7];
     const LIP = rgb('#32712c'), FOAM = rgb('#d8f6ff'), WET = rgb('#b46a2a'), BANK = rgb('#e8a845');
     // distance (px, up to 4) from (x, y) to the nearest pixel where test() holds, along the 4 axes
     const near = (x, y, test) => { for (let d = 1; d <= 6; d++) if (test(x, y - d) || test(x - d, y) || test(x + d, y) || test(x, y + d)) return d; return 9; };
-    const dry = (x, y) => waterAt(x, y) < 0, wet = (x, y) => waterAt(x, y) >= 0;
+    const dry = (x, y) => waterAt(x, y) < 0 && plankAt(x, y) < 0, wet = (x, y) => waterAt(x, y) >= 0;
 
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        let c = at(grass, x, y);
+        let c = at(land(x, y), x, y);
         const e = pathEdge(x, y);
         if (e < 0) c = e > -0.08 ? dim(at(sand, x, y), 0.84) : at(sand, x, y);
         else if (e < 0.06) c = LIP;
@@ -428,10 +553,17 @@ class Overworld extends Phaser.Scene {
         if (wi >= 0) {
           const d = near(x, y, dry);
           c = d === 1 ? FOAM : dry(x, y - 2) || dry(x, y - 3) || dry(x, y - 4) ? dim(at(water, x, y), 0.72) : at(water, x, y);
-          if (PONDS[wi].murky) c = murky(c);
+          if (PLANKS.length && [1, 2, 3, 4].some((k) => plankAt(x, y - k) >= 0)) c = dim(at(water, x, y), 0.6); // shade under piers
+          if (PONDS[wi] && PONDS[wi].murky) c = murky(c);
         } else {
           const d = near(x, y, wet);
           if (d <= 2) c = WET; else if (d <= 6) c = (d === 6 && hash(x, y, 81) > 0.5) ? c : BANK;
+          const pi = PLANKS.length ? plankAt(x, y) : -1;
+          if (pi >= 0) {
+            const p = plankTile(x, y, pi), k = ((y & 15) * 16 + (x & 15)) * 4;
+            if (p.data[k + 3] > 128) c = [p.data[k], p.data[k + 1], p.data[k + 2]];
+            else if (waterAt(x, y + 16) >= 0 || A.sea(x / T, y / T)) c = dim(at(water, x, y), 0.6); // see-through bits over water
+          }
         }
         const i = (y * w + x) * 4;
         img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255;
@@ -472,11 +604,36 @@ class Overworld extends Phaser.Scene {
         this.add.image(x, y, kinds[Math.floor(hash(n, k, 53) * kinds.length)]).setOrigin(0.5, 1).setDepth(y);
       }
     });
+
+    // Small walk-through decor (ferns, mushrooms) scattered on open ground.
+    Object.entries(A.decor || {}).forEach(([key, count], s) => {
+      for (let n = 0, tries = 0; n < count && tries < count * 20; tries++) {
+        const x = Math.floor(hash(tries, s, 101) * MAP_W * T), y = Math.floor(hash(tries, s, 102) * MAP_H * T);
+        const cx = Math.floor(x / T), cy = Math.floor(y / T);
+        if (this.blocked[cy][cx] || pathEdge(x, y) < 0.3 || waterAt(x, y) >= 0) continue;
+        this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(y);
+        n++;
+      }
+    });
+  }
+
+  // Crabs scuttle back and forth on the sand; gulls glide across the bay.
+  addCritters() {
+    (A.critters || []).forEach(([key, tx, ty], i) => {
+      const x = tx * T + 8, y = ty * T + 12;
+      if (key === 'seagull') {
+        const g = this.add.image(-20, y, key).setDepth(8000);
+        this.tweens.add({ targets: g, x: MAP_W * T + 20, y: y - 30, duration: 16000 + i * 3000, delay: i * 4000, repeat: -1, repeatDelay: 3000 });
+      } else {
+        const c = this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(y);
+        this.tweens.add({ targets: c, x: x + 18, duration: 900, yoyo: true, repeat: -1, hold: 1200, repeatDelay: 1500, delay: i * 700, ease: 'Sine.easeInOut' });
+      }
+    });
   }
 
   addCharacters() {
     const from = new URLSearchParams(location.search).get('from');
-    const spawn = from === 'city' ? { x: 23.5, y: 1 } : { x: START.x, y: START.y };
+    const spawn = A.arrive[from] || START;
     this.player = this.add.sprite(spawn.x * T + 8, spawn.y * T + 12, 'player_down_0').setOrigin(0.5, 1);
   }
 
@@ -500,9 +657,11 @@ class Overworld extends Phaser.Scene {
       tall: '#3a8f33', tall_dry: '#c2ac4e', fence: '#8a5a2b', bush: '#2f8f33', stump_tall: '#7a4d24', stump_short: '#7a4d24',
       boulder: '#a0a0a8', tree_round: '#3f8f3a', tree_pine: '#1f6a2c', house_a: '#d4472f', house_b: '#d4472f',
     };
+    Object.assign(colors, { tree_oak: '#2f7a34', log: '#7a4d24', tavern: '#3a5aa8', lighthouse: '#e04a3a', palm: '#3f9f3a' });
     const order = Object.keys(colors);
     this.marks.slice().sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key)).forEach((m) => {
-      x.fillStyle = colors[m.key];
+      if (/ship|sloop|rowboat|buoy/.test(m.key)) return;
+      x.fillStyle = colors[m.key] || '#8a5a2b';
       const inset = m.key.startsWith('tree') ? 1 : 0;
       x.fillRect(m.tx * MINI + inset, m.ty * MINI + inset, m.w * MINI - inset * 2, m.h * MINI - inset * 2);
     });
@@ -637,7 +796,7 @@ class Overworld extends Phaser.Scene {
     const cfg = MONSTERS[type];
     let tx = START.x, ty = START.y;
     for (let tries = 0; tries < 300; tries++) {
-      if (Math.random() < 0.7) {
+      if (TALL.length && Math.random() < 0.7) {
         const r = TALL[Math.floor(Math.random() * TALL.length)];
         tx = r[0] + Math.floor(Math.random() * (r[2] - r[0] + 1));
         ty = r[1] + Math.floor(Math.random() * (r[3] - r[1] + 1));
@@ -828,11 +987,14 @@ class Overworld extends Phaser.Scene {
     p.setTexture(`player_${this.facing}_${frame}`);
     p.setDepth(p.y);
 
-    // Walk back up through the north gate -> the city's south gate.
-    const gx = Math.floor(p.x / T);
-    if (!this.leaving && p.y <= T + 2 && gx >= NORTH_GATE[0] && gx <= NORTH_GATE[1]) {
+    // Walk off the map through an opening -> the neighbouring area.
+    const gx = Math.floor(p.x / T), gy = Math.floor((p.y - 3) / T);
+    const exit = A.exits.find(({ edge, range: [a, b] }) =>
+      edge === 'n' ? p.y <= T + 2 && gx >= a && gx <= b : edge === 's' ? p.y >= MAP_H * T - 2 && gx >= a && gx <= b
+        : (edge === 'w' ? p.x <= 7 : p.x >= MAP_W * T - 7) && gy >= a && gy <= b);
+    if (!this.leaving && exit) {
       this.leaving = true;
-      window.location.href = '/game/city/?from=world';
+      window.location.href = exit.href;
     }
     this.updateCombat(delta);
     this.drawMinimap(time);

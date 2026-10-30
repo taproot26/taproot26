@@ -63,6 +63,7 @@ const golem = makeGolem(W); const fx = new Slashes(W); fx.spawn(x, z, heading, d
 | Page | What it is |
 |---|---|
 | `/game/` | Accounts (custom auth), character creator, Home (the bag shows field loot), and an armory with real item icons |
+| `/game/world/?area=woods` · `?area=docks` | West of the city: woods, then the docks |
 | `/game/world/` | 2D Gen-3 fields: 12 monsters, Space or the button to attack, gold plus per-monster drops, walk-over pickup, a bag (B) |
 | `/game/city/` | 2D city (another session added walls, gates and multiplayer presence) |
 | `/game/city3d/` | **HD-2D** Three.js plaza: pixel-textured 3D houses, billboards, a voxel player (V toggles flat), Q/E rotate, P pixel mode |
@@ -81,6 +82,8 @@ const golem = makeGolem(W); const fx = new Slashes(W); fx.spawn(x, z, heading, d
 7. **This session.** Claude added a slice of town around the yard (houses, corner tavern, well, market stalls, lamps, trees), moved every 3D builder into `game/lib/stylized3d.js` so future scenes can reuse it, and wrote this log.
 
 8. **Stardew-style fields.** From a Stardew Valley reference, `valley.py` redraws the fields: seamless 64px grass with leaf tufts, warm sand paths with pebbles and hoe marks, bright water with glints, foam and sandy pond banks, fruit trees, layered pines, log fences, and shingle-roofed cottages. The fields load these PNGs under the old texture keys, so no game logic changed.
+
+9. **Woods and docks (2026-10-30).** The fields page now serves several areas from an `AREAS` table (`/game/world/?area=woods`, `?area=docks`). Each area lists its paths, ponds, tall grass, objects, exits and arrival points. The map runs city west gate → woods (dense oak and pine forest, cabin, two ponds) → docks (beach, stone quay, two piers, pirate ship, tavern, lighthouse, crabs and gulls). Dock tiles from `coast.py` are painted into the ground; `valley.py` gained forest-floor and beach textures plus oak, fern, log and mushrooms.
 
 ### Decisions worth remembering
 - 2D style is Gen-3 Pokémon with a medieval/pirate theme. Art must be original, never ripped tiles.

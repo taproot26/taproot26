@@ -17,6 +17,7 @@ OUT = Path(__file__).resolve().parent / "out" / "valley"
 
 GRASS = ramp("24522a", "32712c", "438f30", "57a834", "74c23e", "9bdb52")
 SAND = ramp("8e4f22", "b46a2a", "d38c38", "e8a845", "f4c25e", "fad889")
+BEACH = ramp("c49a5e", "dcb87c", "ead08f", "f4e0a8", "fbefcc")
 TALL = ramp("2a6a2a", "3f8a30", "5aa838", "7cc444", "a8e060")
 WATER = ramp("1d5d9e", "2a7fc4", "3a9fdc", "52bdea", "86d8f2", "c9f3ff")
 LEAF = ramp("173d26", "22572c", "2f7431", "43923a", "62ad42", "8cc957")
@@ -84,6 +85,47 @@ def tex_grass(seed=3):
         wrap_px(c, x + 1, y, mid); wrap_px(c, x + 2, y - 1, hi)
     for _ in range(40):  # single dark specks for grain
         wrap_px(c, rng.randrange(64), rng.randrange(64), GRASS[1])
+    return c.image()
+
+
+def tex_forest(seed=4):
+    """Darker woodland floor: shaded grass with fallen-leaf litter."""
+    rng = random.Random(seed)
+    c = Canvas(64, 64)
+    n = wnoise(64, 64, 16, rng)
+    for y in range(64):
+        for x in range(64):
+            v = n[y][x] + (rng.random() - 0.5) * 0.12
+            c.px(x, y, GRASS[1] if v < 0.35 else GRASS[2] if v < 0.8 else GRASS[3])
+    for _ in range(120):
+        x, y = rng.randrange(64), rng.randrange(64)
+        hi, mid, lo = (GRASS[4], GRASS[3], GRASS[0]) if n[y][x] > 0.5 else (GRASS[3], GRASS[2], GRASS[0])
+        for dx in (-1, 0, 1):
+            wrap_px(c, x + dx, y + 1, lo)
+        wrap_px(c, x - 1, y, mid); wrap_px(c, x - 2, y - 1, hi)
+        wrap_px(c, x, y, mid); wrap_px(c, x, y - 1, hi)
+        wrap_px(c, x + 1, y, mid); wrap_px(c, x + 2, y - 1, hi)
+    litter = [hx("a8642a"), hx("c8843a"), hx("8a4a22"), hx("d8a040")]
+    for _ in range(36):  # fallen leaves: two-pixel flecks
+        x, y, col = rng.randrange(64), rng.randrange(64), rng.choice(litter)
+        wrap_px(c, x, y, col); wrap_px(c, x + 1, y, col)
+        wrap_px(c, x, y + 1, GRASS[0])
+    return c.image()
+
+
+def tex_beach(seed=6):
+    rng = random.Random(seed)
+    c = Canvas(64, 64)
+    n = wnoise(64, 64, 16, rng)
+    for y in range(64):
+        for x in range(64):
+            v = n[y][x] + (rng.random() - 0.5) * 0.3
+            c.px(x, y, BEACH[1] if v < 0.3 else BEACH[3] if v > 0.8 else BEACH[2])
+    for _ in range(90):
+        wrap_px(c, rng.randrange(64), rng.randrange(64), rng.choice((BEACH[0], BEACH[4], BEACH[1])))
+    for _ in range(6):  # shell bits
+        x, y = rng.randrange(64), rng.randrange(64)
+        wrap_px(c, x, y, hx("fff4ea")); wrap_px(c, x + 1, y, hx("f0b8a8")); wrap_px(c, x, y + 1, BEACH[0])
     return c.image()
 
 
@@ -233,6 +275,73 @@ def tree_pine():
         if rng.random() < 0.12:
             shift(c, x, y, PINE, 1)
     c.shadows.append((15, 45, 9, 2.6, 90))
+    c.outline()
+    return c.image()
+
+
+def tree_oak():
+    rng = random.Random(31)
+    c = Canvas(40, 50)
+    trunk(c, 18, 21, 30, 47)
+    c.px(17, 36, BARK[1]); c.px(22, 34, BARK[1]); c.px(16, 46, BARK[2]); c.px(23, 46, BARK[1])
+    canopy(c, [(20, 14, 11), (9, 20, 8), (31, 20, 8), (13, 28, 8), (27, 28, 8), (20, 8, 8), (20, 24, 9)],
+           LEAF, rng)
+    for x, y in rng.sample([(x, y) for y in range(50) for x in range(40) if c.get(x, y) == LEAF[0]], 20):
+        c.px(x, y, hx("12301e"))
+    c.shadows.append((20, 47, 11, 3, 100))
+    c.outline()
+    return c.image()
+
+
+def fern():
+    c = Canvas(18, 13)
+    for i, (ang, L) in enumerate([(-2.6, 7), (-2.1, 8), (-1.57, 8), (-1.0, 8), (-0.5, 7), (-2.9, 5), (-0.25, 5)]):
+        import math
+        for k in range(L):
+            x, y = 9 + math.cos(ang) * k, 11 + math.sin(ang) * k * 0.9
+            c.px(round(x), round(y), LEAF[2] if k < 3 else LEAF[3] if k < L - 1 else LEAF[4])
+            if 1 < k < L - 1 and k % 2 == 0:  # leaflets
+                c.px(round(x + math.sin(ang)), round(y - math.cos(ang) * 0.5), LEAF[4])
+    c.outline()
+    return c.image()
+
+
+def log():
+    c = Canvas(32, 13)
+    for y in range(3, 11):
+        for x in range(4, 28):
+            t = (y - 3) / 7
+            col = band(BARK, 0.55 - t * 1.25)
+            if (x * 5 + y * 3) % 11 == 0:
+                col = BARK[max(0, BARK.index(col) - 1)]
+            c.px(x, y, col)
+    rings = ramp("a8743e", "c99a5c", "e2bb7c")
+    for y in range(3, 11):
+        for x in range(25, 31):
+            d = ((x + 0.5 - 28) / 2.6) ** 2 + ((y + 0.5 - 7) / 4) ** 2
+            if d <= 1:
+                c.px(x, y, rings[0] if d > 0.65 else rings[2] if d < 0.12 or 0.3 < d < 0.45 else rings[1])
+    for x, y in [(8, 3), (9, 2), (14, 3), (19, 3), (20, 2)]:  # moss on top
+        c.px(x, y, LEAF[4])
+    c.px(12, 2, LEAF[3]); line(c, 13, 1, 13, 2, LEAF[2])  # sprig
+    c.shadows.append((16, 11, 13, 2, 80))
+    c.outline()
+    return c.image()
+
+
+def mushrooms():
+    c = Canvas(14, 12)
+    cap = ramp("8a1e1e", "c23a2a", "e8583c", "ff8a66")
+    for cx, cy, r, stem in [(4, 5, 3, 4), (9, 3, 3.6, 5), (11, 8, 2, 2)]:
+        rect(c, round(cx) - 1, round(cy), 2, stem + 1, hx("f2e6cc"))
+        c.px(round(cx), round(cy) + 1, hx("cbbd9e"))
+        blob(c, cx, cy, r, r * 0.75, cap)
+        for y in range(round(cy) + 1, c.h):
+            for x in range(c.w):
+                if c.get(x, y) in cap:
+                    c.px(x, y, None)
+        c.px(round(cx) - 1, round(cy - r * 0.4), WHITE); c.px(round(cx) + 1, round(cy - r * 0.2), WHITE)
+    c.shadows.append((7, 11, 6, 1.5, 70))
     c.outline()
     return c.image()
 
@@ -498,8 +607,10 @@ def inside_roof(px, py, pts):
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     g, s, wt = save(tex_grass(), "grass"), save(tex_sand(), "sand"), save(tex_water(), "water")
+    fo, be = save(tex_forest(), "forest"), save(tex_beach(), "beach")
     sprites = {
-        "tree_round": tree_round(), "tree_pine": tree_pine(), "bush": bush(),
+        "tree_round": tree_round(), "tree_pine": tree_pine(), "tree_oak": tree_oak(), "bush": bush(),
+        "fern": fern(), "log": log(), "mushrooms": mushrooms(),
         "stump_tall": stump(True), "stump_short": stump(False), "boulder": boulder(),
         "fence": fence_img(), "fence_post": fence_post_img(),
         "house_a": cottage(80, 86, ROOF_RED, "plank", 44, seed=2),
@@ -513,16 +624,16 @@ def main():
     }
     for k, im in sprites.items():
         save(im, k)
-    tiles = Image.new("RGBA", (192, 64))
-    for i, im in enumerate((g, s, wt)):
+    tiles = Image.new("RGBA", (320, 64))
+    for i, im in enumerate((g, s, wt, fo, be)):
         tiles.paste(im, (i * 64, 0))
     tiles2 = Image.new("RGBA", (128, 128))
     for i in range(4):
         tiles2.paste(g if i % 2 == 0 else g, ((i % 2) * 64, (i // 2) * 64))
-    groups = [("grass / sand / water", [tiles]), ("grass 2x2", [tiles2])]
+    groups = [("grass / sand / water / forest / beach", [tiles]), ("grass 2x2", [tiles2])]
     groups += [(k, [im]) for k, im in sprites.items()]
     preview(groups, scale=4, max_w=360).save(OUT / "valley_preview.png")
-    print(f"valley: {len(sprites) + 3} images -> {OUT}")
+    print(f"valley: {len(sprites) + 5} images -> {OUT}")
 
 
 if __name__ == "__main__":

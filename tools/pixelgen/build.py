@@ -5,7 +5,7 @@
     python3 tools/pixelgen/build.py items loot # just these
 
 Generators write to tools/pixelgen/out/<set>; INSTALL copies what the game
-loads into game/. Sets with no entry (market, interior, coast) are previews and
+loads into game/. Sets with no entry (market, interior, coast, cave) are previews and
 source art only until a map uses them.
 """
 import importlib
@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 GAME = HERE.parent.parent / "game"
 sys.path.insert(0, str(HERE))
 
-GENERATORS = ["market", "interior", "interior_mart", "monsters", "loot", "coast", "items", "city3d", "valley"]
+GENERATORS = ["market", "interior", "interior_mart", "monsters", "loot", "coast", "items", "city3d", "valley", "cave"]
 INSTALL = {
     "monsters": ("monsters", GAME / "world/assets/monsters", ["monsters.png", "king_slime.png", "slash.png"]),
     "loot": ("loot", GAME / "world/assets/loot", ["loot.png", "coin.png", "gold.png", "slime_gel.png", "spore_cap.png",
@@ -25,6 +25,9 @@ INSTALL = {
     "items": ("items", GAME / "assets/items", None),  # None = every PNG in the set
     "city3d": ("city3d", GAME / "city3d/assets", None),
     "valley": ("valley", GAME / "world/assets/valley", None),
+    "coast": ("coast", GAME / "world/assets/coast", [f"{k}.png" for k in (
+        "dock", "dock_edge_s", "dock_side_w", "dock_side_e", "quay_top", "quay_face", "tavern", "lighthouse", "pirate_ship", "sloop",
+        "rowboat", "palm", "barrel", "crate", "sack", "cannon", "rope_coil", "anchor", "chest", "bollard", "buoy", "crab", "seagull")]),
 }
 
 
