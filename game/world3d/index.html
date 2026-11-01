@@ -194,7 +194,7 @@ else if (!localStorage.getItem('taproot_character')) window.location.replace('/g
   <button id="jumpBtn" type="button" tabindex="-1" aria-label="Jump">JUMP</button>
   <button id="attackBtn" type="button" tabindex="-1" aria-label="Attack">&#9876;&#65039;</button>
 </div>
-<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>J</b> attack &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag &middot; <b>T</b> chat</div>
+<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>J</b> attack &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag &middot; <b>U</b> auto-run &middot; <b>T</b> chat</div>
 <div id="chat">
   <div id="chatLog"></div>
   <div id="chatRow" hidden><input id="chatIn" type="text" placeholder="Say something..." maxlength="200" autocomplete="off"><button id="chatSend" type="button">Send</button></div>
@@ -2181,6 +2181,22 @@ function cycleCam() {
   cycleCam.timer = setTimeout(() => { t.hidden = true; }, 1200);
 }
 
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.hidden = true; }, 1200);
+}
+// Auto-run: U toggles walking forward hands-free (steer with the camera, A/D still strafe).
+// Shift, S / down, or U again turns it off and you're back to walking normally.
+let autoRun = false;
+function setAutoRun(on) {
+  if (autoRun === on) return;
+  autoRun = on;
+  toast(on ? 'Auto-run on (U / Shift to stop)' : 'Auto-run off');
+}
+
 /* ---------- shops, crafting, gear and potions ---------- */
 let owned = [];
 try { owned = JSON.parse(localStorage.getItem('taproot_owned')) || []; } catch (e) {}
@@ -2712,6 +2728,8 @@ addEventListener('keydown', (e) => {
   if ((e.code === 'KeyT' || e.code === 'Enter') && !modal) { e.preventDefault(); openChat(); return; }
   keys[e.code] = true;
   if (modal) { if (e.code === 'Escape' || e.code === 'KeyF') closeModal(); return; } // a shop / crafting panel is open
+  if (e.code === 'KeyU') setAutoRun(!autoRun);
+  else if (autoRun && ['ShiftLeft', 'ShiftRight', 'KeyS', 'ArrowDown'].includes(e.code)) setAutoRun(false);
   if (e.code === 'Space') jump();
   if (e.code === 'KeyJ' || e.code === 'KeyK') swing();
   if (e.code === 'KeyH') drinkBest();
@@ -2777,9 +2795,10 @@ function update(dt, now) {
   let fy = fainted || modal ? 0 : k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown');
   let fx = fainted || modal ? 0 : k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
   if (joy && !fainted) { fx += joy.fx; fy += joy.fy; }
+  if (autoRun && !fainted && !modal) fy = Math.max(fy, 1);
   camYaw += (k('KeyQ') - k('KeyE')) * 2.2 * dt;
   const moving = Math.hypot(fx, fy) > 0.15;
-  const boosting = moving && (keys.ShiftLeft || keys.ShiftRight) && !nitroLock && nitro > 0;
+  const boosting = moving && !autoRun && (keys.ShiftLeft || keys.ShiftRight) && !nitroLock && nitro > 0;
   if (boosting) { nitro -= dt * 0.12; if (nitro <= 0) { nitro = 0; nitroLock = true; } }
   else { nitro = Math.min(1, nitro + dt * 0.3); if (nitroLock && nitro > 0.25) nitroLock = false; }
   if (moving) {
