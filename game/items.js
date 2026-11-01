@@ -59,6 +59,9 @@
     void_blade:    { name: 'Void Blade',    slot: 'rhand',  rarity: 'legendary', stats: { atk: 12, mag: 5, spd: 3 } },
     cutlass:       { name: 'Cutlass',       slot: 'rhand',  rarity: 'uncommon',  stats: { atk: 7, spd: 1 } },
     trident:       { name: 'Sea Trident',   slot: 'rhand',  rarity: 'rare',      stats: { atk: 9, mag: 3 } },
+    apprentice_wand:{ name: 'Apprentice Wand', slot: 'rhand', rarity: 'common',  stats: { atk: 1, mag: 4 } },
+    fire_wand:     { name: 'Fire Wand',     slot: 'rhand',  rarity: 'uncommon',  stats: { atk: 2, mag: 6 } },
+    inferno_staff: { name: 'Inferno Staff', slot: 'rhand',  rarity: 'legendary', stats: { atk: 4, mag: 12 } },
     // LEFT HAND (shields / off-hand)
     wooden_shield: { name: 'Wooden Shield', slot: 'lhand',  rarity: 'common',    stats: { def: 4, hp: 5 } },
     iron_buckler:  { name: 'Iron Buckler',  slot: 'lhand',  rarity: 'common',    stats: { def: 3, spd: 1 } },

@@ -428,13 +428,33 @@ const WEAPONS = {
     part(G.cyl, toon('#7a5230'), w, [0, 0.2, 0], [0.022, 1.0, 0.022]);
     for (let i = 0; i < 3; i++) part(new THREE.TorusGeometry(0.05, 0.012, 6, 14, Math.PI * 1.3), toon('#7a5230'), w, [0, 0.72, 0], null, [0, (i * Math.PI * 2) / 3, Math.PI / 2], false);
     part(G.sph, glow('#4fc3ff', 1.6), w, [0, 0.78, 0], 0.065, null, false);
-    return { type: 'pole', tip: [0, 0.8, 0], base: [0, 0.55, 0], trail: '#4fc3ff', orb: true };
+    return { type: 'pole', tip: [0, 0.8, 0], base: [0, 0.55, 0], trail: '#4fc3ff', cast: { color: '#4fc3ff', cd: 0.55, range: 14, aoe: 0, size: 1 } };
   },
   trident(w) {
     part(G.cyl, toon('#2aa0a8'), w, [0, 0.25, 0], [0.02, 1.1, 0.02]);
     part(rbox(0.16, 0.025, 0.03, 0.01), toon('#e0b450'), w, [0, 0.8, 0]);
     for (const x of [-0.07, 0, 0.07]) part(G.cone, toon('#e0b450'), w, [x, 0.88 + (x ? 0 : 0.03), 0], [0.018, 0.16 + (x ? 0 : 0.05), 0.018]);
     return { type: 'pole', tip: [0, 0.98, 0], base: [0, 0.6, 0], trail: '#6ae8ff' };
+  },
+  // casters: attack shoots a magic ball from the tip (see `cast`)
+  apprentice_wand: (w) => WEAPONS.wand(w, '#7a5230', '#6fd8ff', 0.3, { color: '#6fd8ff', cd: 0.4, range: 12, aoe: 0, size: 0.8 }),
+  fire_wand: (w) => WEAPONS.wand(w, '#4a2418', '#ff6a2e', 0.34, { color: '#ff7a2a', cd: 0.45, range: 14, aoe: 0, size: 1 }),
+  wand(w, wood, gem, len, cast) {
+    part(new THREE.CylinderGeometry(0.011, 0.018, len, 8), toon(wood), w, [0, len / 2 - 0.05, 0]);
+    part(G.cyl, toon('#e0b048'), w, [0, -0.02, 0], [0.024, 0.05, 0.024]);
+    part(G.cyl, toon('#e0b048'), w, [0, len - 0.08, 0], [0.02, 0.03, 0.02], null, false);
+    part(new THREE.OctahedronGeometry(0.045, 0), glow(gem, 1.8), w, [0, len - 0.02, 0], [1, 1.5, 1], null, false);
+    return { type: 'wand', tip: [0, len + 0.02, 0], base: [0, len * 0.5, 0], trail: gem, cast };
+  },
+  inferno_staff(w) {
+    part(new THREE.CylinderGeometry(0.02, 0.028, 1.05, 8), toon('#3a1a14'), w, [0, 0.2, 0]);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      part(G.cone, toon('#e0b048'), w, [Math.cos(a) * 0.06, 0.78, Math.sin(a) * 0.06], [0.018, 0.12, 0.018], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5], false);
+    }
+    part(G.sph, glow('#ff5a1a', 2.2), w, [0, 0.83, 0], 0.085, null, false);
+    part(G.sph, glow('#ffe08a', 2), w, [0, 0.83, 0], 0.045, null, false);
+    return { type: 'pole', tip: [0, 0.86, 0], base: [0, 0.6, 0], trail: '#ff6a2e', cast: { color: '#ff6a2e', cd: 0.6, range: 16, aoe: 1.8, size: 1.5 } };
   },
   hunter_bow: (w) => WEAPONS.bow(w, '#8b5e3c'),
   composite_bow: (w) => WEAPONS.bow(w, '#5a3a5a'),
@@ -763,7 +783,7 @@ export function makeHero3D(look = {}) {
     let spY = -s1 * 0.26 * m + st.headYaw * 0.2 * (1 - m), spX = 0.04 * m + 0.2 * r + clamp(accF * 0.012, -0.15, 0.2), spZ = 0;
     const swing = (0.5 + 0.45 * r) * m, idle = (1 - m) * Math.sin(t * 1.3) * 0.03;
     let shLx = s1 * swing + idle, shRx = -s1 * swing - idle, shLz = 0.1 + 0.2 * r + Math.abs(idle), shRz = -(0.1 + 0.2 * r + Math.abs(idle));
-    let elL = -(0.2 + 0.85 * r) * Math.max(m, 0.35), elR = elL, wpx = wtype === 'blade' ? 1.85 : 0, shRy = 0;
+    let elL = -(0.2 + 0.85 * r) * Math.max(m, 0.35), elR = elL, wpx = wtype === 'blade' ? 1.85 : wtype === 'wand' ? 1.5 : 0, shRy = 0;
     if (wtype === 'pole') { shRx = shRx * 0.4 - 0.15; elR = -0.55; wpx = 0.55; }
     if (ctx.light) elL = -1.1;                         // lantern held up in front
     if (ctx.orb || ctx.sparks) elL = -0.9;
@@ -776,6 +796,9 @@ export function makeHero3D(look = {}) {
       if (wtype === 'blade') {
         if (q < 0.2) { const e = easeOut(q / 0.2); a = { spY: -1.1 * e, shRx: -1.45 * e, shRz: -0.7 * e, elR: -0.25, wpx: lerp(1.85, 2.6, e), shLx: -0.3 * e, shLz: 0.1 + 0.3 * e }; }
         else { const e = easeOut((q - 0.2) / 0.28); a = { spY: -1.1 + 2.3 * e, shRx: -1.45, shRz: -0.7 + 1.5 * e, elR: -0.15, wpx: 2.6, shLx: -0.3, shLz: 0.4 }; }
+      } else if (wtype === 'wand') { // flick: raise the wand overhead, snap it forward to point
+        if (q < 0.2) { const e = easeOut(q / 0.2); a = { spY: -0.3 * e, shRx: -0.6 - 1.5 * e, shRz: -0.25, elR: -0.9 * e, wpx: lerp(1.5, 2.3, e), shLx: -0.25 * e, shLz: 0.25 }; }
+        else { const e = easeOut((q - 0.2) / 0.28); a = { spY: -0.3 + 0.35 * e, shRx: -2.1 + 0.6 * e, shRz: -0.25, elR: -0.9 + 0.85 * e, wpx: 2.3 + 0.75 * e, shLx: -0.25, shLz: 0.25 }; }
       } else if (wtype === 'pole') {
         if (q < 0.22) { const e = easeOut(q / 0.22); a = { spY: -0.45 * e, shRx: -0.5 - 0.5 * e, shRz: -0.2, elR: -0.55 - 0.8 * e, wpx: lerp(0.55, 1.45, e), shLx: -0.6 * e, shLz: 0.2 }; }
         else { const e = easeOut((q - 0.22) / 0.26); a = { spY: -0.45 + 0.75 * e, shRx: -1.0 - 0.45 * e, shRz: -0.2, elR: -1.35 + 1.2 * e, wpx: 1.45, shLx: -0.6, shLz: 0.2 }; hipZ = 0.06 * e * w; }
@@ -918,7 +941,14 @@ export function makeHero3D(look = {}) {
 
   return {
     root, update,
+    caster: W && W.cast ? W.cast : null,   // { color, cd, range, aoe, size } for wands and staffs
+    tipWorld: (v) => tip.getWorldPosition(v),
     hurt() { st.hurt = 0.4; },
+    dispose() { // remove the bits that live in the scene rather than under root
+      trail.removeFromParent();
+      if (pet) pet.g.removeFromParent();
+      puffs.forEach((pf) => pf.m.removeFromParent());
+    },
     emote(name, dur = 0.8) { st.emote = name; st.emoteT = dur; },
     setVisible(v) { root.visible = v; },
   };

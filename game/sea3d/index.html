@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taproot Sea</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --panel: rgba(12, 40, 64, 0.82); --rim: #0e2a44; --glow: rgba(120, 220, 255, 0.45); --gold: #ffcf3a; --sea: #5ad0ff; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #8cc8f0; color: #fff; font-family: 'Nunito', system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
+  #scene { position: fixed; inset: 0; display: block; touch-action: none; cursor: grab; }
+  #scene.drag { cursor: grabbing; }
+  .ui, .chip, .pill, button, .float, .tag { font-family: 'Lilita One', system-ui, sans-serif; letter-spacing: 0.3px; }
+  .panel { position: fixed; z-index: 3; background: var(--panel); border: 2px solid var(--rim); border-radius: 18px; box-shadow: 0 0 0 2px var(--glow), 0 8px 22px rgba(0, 0, 0, 0.25); }
+  .tl { left: 12px; top: 12px; padding: 10px 14px 10px 10px; display: flex; gap: 10px; align-items: center; width: min(330px, calc(100% - 172px)); }
+  .avatar { flex: none; width: 46px; height: 46px; border-radius: 50%; border: 3px solid #0e2a44; background: radial-gradient(circle at 35% 30%, #bff0ff, #3aa8e0) no-repeat; image-rendering: pixelated; }
+  .title { font: 400 19px/1.1 'Lilita One', sans-serif; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); }
+  .sub { margin-top: 4px; font: 800 12px/1.3 'Nunito', sans-serif; color: #d8f0ff; }
+  .sub a { color: #fff; }
+  .chip { position: fixed; z-index: 3; left: 50%; top: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 18px 6px 8px; font-size: 18px;
+    background: var(--panel); border: 2px solid var(--rim); border-radius: 999px; box-shadow: 0 0 0 2px var(--glow); white-space: nowrap; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); }
+  .chip .dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: #3a2400; font-size: 14px; text-shadow: none; }
+  .mini { position: fixed; z-index: 3; right: 12px; top: 10px; width: 180px; height: 180px; border-radius: 50%; padding: 5px; background: #0a2238; box-shadow: 0 0 0 3px #e0b048, 0 0 18px rgba(0, 0, 0, 0.3); }
+  #minimap { width: 100%; height: 100%; display: block; }
+  .mini-label { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font: 400 15px/1 'Lilita One', sans-serif; white-space: nowrap; text-shadow: 0 2px 0 #000, 0 0 6px #000; }
+  .pills { position: fixed; z-index: 3; right: 12px; top: 200px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .pill { display: flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: 18px; border-radius: 999px; background: #0c2a44; border: 3px solid #0a1e30; box-shadow: 0 0 0 2px var(--c, #5ad0ff); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
+  /* compass + sail gauge */
+  .helm { position: fixed; z-index: 3; left: 14px; bottom: 14px; display: flex; gap: 12px; align-items: flex-end; }
+  .compass { width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle, #f6ecd2 55%, #c8a060 57%, #8a5a2a 70%); border: 4px solid #6a4020; position: relative; box-shadow: 0 4px 0 #3a2410; }
+  .compass .n { position: absolute; left: 50%; top: 6px; transform: translateX(-50%); font: 400 13px/1 'Lilita One', sans-serif; color: #b8302a; text-shadow: none; }
+  .compass .needle { position: absolute; left: 50%; top: 50%; width: 10px; height: 64px; margin: -32px 0 0 -5px; background: linear-gradient(#d8322e 50%, #2a4a6a 50%); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+  .compass .cap { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; border-radius: 50%; background: #e0b048; border: 2px solid #6a4020; }
+  .gauge { padding: 8px 14px; border-radius: 16px; background: var(--panel); border: 2px solid var(--rim); box-shadow: 0 0 0 2px var(--glow); font: 400 16px/1.2 'Lilita One', sans-serif; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); }
+  .gauge .bars { display: flex; gap: 4px; margin-top: 4px; }
+  .gauge .bars i { width: 22px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.2); }
+  .gauge .bars i.on { background: #f4ecd6; box-shadow: 0 0 6px rgba(255, 255, 255, 0.6); }
+  .gauge small { display: block; font-size: 13px; color: #bfe6ff; }
+  .actions { position: fixed; z-index: 3; right: max(14px, env(safe-area-inset-right, 0px)); bottom: max(14px, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .actions button { cursor: pointer; touch-action: manipulation; border: 3px solid #0e2a44; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); }
+  .actions button:active { transform: translateY(2px); }
+  .actions kbd { font: 700 10px monospace; opacity: 0.7; margin-left: 4px; }
+  #actBtn { padding: 10px 16px; border-radius: 999px; font-size: 17px; color: #3a2400; text-shadow: none; background: linear-gradient(#ffe9a0, #e0b048); box-shadow: 0 3px 0 #8a6a20, 0 0 14px rgba(255, 210, 90, 0.6); }
+  .sailbtns { display: flex; gap: 8px; }
+  .sailbtns button { width: 54px; height: 54px; border-radius: 50%; font-size: 20px; background: radial-gradient(circle at 35% 30%, #f8f2e2, #c8b890 70%); color: #3a2a1a; text-shadow: none; box-shadow: 0 4px 0 #6a5a3a; }
+  #camBtn { padding: 6px 12px; border-radius: 999px; font-size: 15px; background: #123a5a; box-shadow: 0 3px 0 #08182a; }
+  .help { position: fixed; z-index: 3; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 8px 14px; font: 800 13px/1.3 'Nunito', sans-serif; border-radius: 999px; background: var(--panel); border: 2px solid var(--rim); box-shadow: 0 0 0 2px var(--glow); white-space: nowrap; }
+  .help b { font-family: 'Lilita One', sans-serif; font-weight: 400; color: var(--gold); }
+  #labels { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+  .tag { position: absolute; left: 0; top: 0; padding: 3px 12px 5px; text-align: center; white-space: nowrap; border-radius: 12px; background: #7a4a28; border: 2px solid #3a2414; color: #fff2d0; font-size: 16px; box-shadow: 0 3px 0 #3a2414; }
+  .float { position: absolute; left: 0; top: 0; font-size: 22px; white-space: nowrap; text-shadow: 0 2px 0 #1a0a1a, 0 0 6px rgba(0, 0, 0, 0.6); }
+  #fade { position: fixed; inset: 0; z-index: 9; background: #000; opacity: 1; pointer-events: none; transition: opacity 0.6s; }
+  @media (max-width: 640px) {
+    .mini { width: 124px; height: 124px; }
+    .mini-label { font-size: 12px; bottom: 6px; }
+    .pills { top: 142px; }
+    .help { display: none; }
+    .compass { width: 70px; height: 70px; }
+    .compass .needle { height: 48px; margin-top: -24px; }
+    .tl { width: calc(100% - 156px); }
+  }
+</style>
+<script>
+if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
+</script>
+<script src="/game/items.js"></script>
+<script src="/game/sprite.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="labels"></div>
+
+<div class="panel tl">
+  <div class="avatar" aria-hidden="true"></div>
+  <div>
+    <div class="title">Taproot Sea</div>
+    <div class="sub">Sail back to <b>Taproot Docks</b> to go ashore &middot; <a href="/game/world3d/?area=docks&amp;from=sea">Leave</a></div>
+  </div>
+</div>
+<div class="chip" id="chip" hidden><span class="dot">&#9875;</span><span id="chipText"></span></div>
+<div class="mini"><canvas id="minimap" width="240" height="240" aria-label="Sea chart"></canvas><div class="mini-label">Sea Chart</div></div>
+<div class="pills">
+  <div class="pill" style="--c: #ffcf3a"><span>&#128176;</span><b id="goldText">0</b></div>
+  <div class="pill" style="--c: #5ad0ff"><span>&#127965;</span><b id="foundText">0</b></div>
+</div>
+<div class="helm">
+  <div class="compass"><span class="n">N</span><div class="needle" id="needle"></div><div class="cap"></div></div>
+  <div class="gauge"><span id="sailText">Furled</span><div class="bars"><i></i><i></i><i></i></div><small id="knots">0 knots</small></div>
+</div>
+<div class="actions">
+  <button id="actBtn" type="button" tabindex="-1" hidden><span id="actText">Dock</span><kbd>F</kbd></button>
+  <button id="camBtn" type="button" tabindex="-1" aria-label="Camera view">&#127909;<kbd>C</kbd></button>
+  <div class="sailbtns">
+    <button id="downBtn" type="button" tabindex="-1" aria-label="Lower sail">&#9660;</button>
+    <button id="upBtn" type="button" tabindex="-1" aria-label="Raise sail">&#9650;</button>
+  </div>
+</div>
+<div class="help"><b>W / S</b> sails &middot; <b>A / D</b> steer &middot; <b>Shift</b> gust &middot; <b>F</b> dock / loot &middot; <b>Drag</b> look &middot; <b>C</b> camera</div>
+<div id="fade"></div>
+<script type="module" src="./sea.js"></script>
+</body>
+</html>
