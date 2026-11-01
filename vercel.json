@@ -1,5 +1,40 @@
 {
   "rewrites": [
-    { "source": "/p/:slug", "destination": "/p/index.html" }
+    {
+      "source": "/p/:slug",
+      "destination": "/p/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/game/world",
+      "destination": "/game/world3d/",
+      "permanent": false
+    },
+    {
+      "source": "/game/world/",
+      "destination": "/game/world3d/",
+      "permanent": false
+    },
+    {
+      "source": "/game/world/index.html",
+      "destination": "/game/world3d/",
+      "permanent": false
+    },
+    {
+      "source": "/game/city",
+      "destination": "/game/world3d/?area=city",
+      "permanent": false
+    },
+    {
+      "source": "/game/city/",
+      "destination": "/game/world3d/?area=city",
+      "permanent": false
+    },
+    {
+      "source": "/game/city/index.html",
+      "destination": "/game/world3d/?area=city",
+      "permanent": false
+    }
   ]
 }

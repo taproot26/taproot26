@@ -502,6 +502,9 @@
     openAuth();
   });
   $('authSwap').addEventListener('click', () => setMode(mode === 'login' ? 'signup' : 'login'));
+  // Sent here from the 3D world without a character (?create=1): go straight to the creator
+  // (enterGame shows it when the account has no character), or to sign-in if the session is gone.
+  if (new URLSearchParams(location.search).has('create')) $('enter').click();
   $('authClose').addEventListener('click', () => { $('auth').hidden = true; });
   $('authForm').addEventListener('submit', async (e) => {
     e.preventDefault();

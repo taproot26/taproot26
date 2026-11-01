@@ -32,7 +32,6 @@ INSTALL = {
         "cave_entrance", "crystal_blue", "crystal_purple", "glowshrooms", "node_gold", "node_iron", "node_crystal", "stalagmite_big",
         "stalagmite_small", "boulders", "minecart", "beam", "bones", "cobweb", "puddle", "pickaxe", "torch_0", "torch_1", "track_h",
         "track_v")]),
-    "city": ("city", GAME / "city/assets/plots", None),
 }
 
 
