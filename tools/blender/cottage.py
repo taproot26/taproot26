@@ -30,8 +30,10 @@ FRONT = -D / 2  # Blender -Y becomes +Z (the street side) in glTF
 
 
 def hexc(h, a=1.0):
+    """#rrggbb (sRGB, as on screen) -> linear RGBA, which is what Blender's colour inputs expect."""
     h = h.lstrip("#")
-    return [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)] + [a]
+    lin = lambda c: c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    return [lin(int(h[i:i + 2], 16) / 255) for i in (0, 2, 4)] + [a]
 
 
 # ------------------------------------------------------------------ materials

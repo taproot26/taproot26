@@ -235,6 +235,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { makeHero3D, loadBlenderParts } from '/game/lib/hero3d.js';
+import { loadBlenderHero, makeBlenderHero } from '/game/lib/blenderhero.js';
 import { SHOPS, SELL, RECIPES, CONSUMABLES } from './shops.js';
 
 const AREA = new URLSearchParams(location.search).get('area');
@@ -1451,7 +1452,10 @@ const boats = [];   // { g, x, y, z, ph, sail? } bob on the water; sailing ones 
 // Style test: ?blender=1 swaps the town cottages for the Blender-built model (tools/blender/cottage.py).
 const BLENDER = new URLSearchParams(location.search).has('blender');
 const BLENDER_COTTAGE = BLENDER ? (await new GLTFLoader().loadAsync('/game/assets3d/cottage.glb')).scene : null;
-if (BLENDER) await loadBlenderParts('/game/assets3d/hero_parts.glb');
+// Style test: ?hero=blender makes your own hero the fully modelled, rigged Blender character.
+const BLENDER_HERO = new URLSearchParams(location.search).get('hero') === 'blender';
+if (BLENDER || BLENDER_HERO) await loadBlenderParts('/game/assets3d/hero_parts.glb');
+if (BLENDER_HERO) await loadBlenderHero('/game/assets3d/hero_blender.glb');
 // Trees are instanced: one geometry per kind (node transforms baked in), drawn hundreds of times.
 const BLENDER_TREES = {};
 if (BLENDER) await Promise.all(['tree_round', 'tree_oak', 'tree_pine'].map(async (k) => {
@@ -2098,7 +2102,13 @@ try { camMode = Math.min(CAM_MODES.length - 1, Math.max(0, +localStorage.getItem
 let camYaw = 0, camPitch = CAM_MODES[camMode].pitch, camDist = CAM_MODES[camMode].dist, camPitchT = camPitch, camDistT = camDist;
 let fov = 58, shake = 0, lastDrag = -1e9;
 if (INDOOR) { camDist = camDistT = 7.5; camPitch = camPitchT = 0.95; }
-let hero = makeHero(charData || DEFAULT_CHAR);
+function makePlayerHero(look) {
+  if (!BLENDER_HERO) return makeHero(look);
+  const h = makeBlenderHero(look);
+  scene.add(h.root);
+  return h;
+}
+let hero = makePlayerHero(charData || DEFAULT_CHAR);
 const P = { x: spawnAt.x + 0.5, z: spawnAt.y + 0.75, y: 0, vy: 0, heading: Math.PI, phase: 0, atk: -1, atkL: -1, grounded: 0 };
 if (A.arrive[from]) { // arriving through a gate: face into the map, not back at the gate
   P.heading = Math.atan2(MAP_W / 2 - P.x, MAP_H / 2 - P.z);
@@ -2312,7 +2322,7 @@ function equip(id, slot) {
   const pos = hero.root.position.clone(), ry = hero.root.rotation.y;
   hero.dispose();
   hero.root.removeFromParent();
-  hero = makeHero(charData);
+  hero = makePlayerHero(charData);
   hero.root.position.copy(pos);
   hero.root.rotation.y = ry;
   const before = stats.hp;

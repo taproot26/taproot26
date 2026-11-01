@@ -27,9 +27,11 @@ from mathutils import Vector
 OUT = Path(sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "hero_parts.glb").resolve()
 
 
-def hexc(h):
+def hexc(h, a=1.0):
+    """#rrggbb (sRGB, as on screen) -> linear RGBA, which is what Blender's colour inputs expect."""
     h = h.lstrip("#")
-    return [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)] + [1.0]
+    lin = lambda c: c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    return [lin(int(h[i:i + 2], 16) / 255) for i in (0, 2, 4)] + [a]
 
 
 def flat_mat(name, color):
@@ -143,7 +145,7 @@ def bake_colors(o, mode, mask=None):
         if mask is not None:  # per-corner extra darkening (soles, seams)
             shade = shade * mask[:, None]
         col = np.concatenate([np.repeat(shade, 3, axis=1), np.ones((len(shade), 1))], axis=1)
-    out = o.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    out = o.data.color_attributes.new("Col", "FLOAT_COLOR", "CORNER")
     for i, c in enumerate(out.data):
         c.color = col[i].tolist()
     for n in ("ao", "diff"):

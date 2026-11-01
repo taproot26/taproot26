@@ -1001,3 +1001,7 @@ export function makeHero3D(look = {}) {
     setVisible(v) { root.visible = v; },
   };
 }
+
+// Shared with blenderhero.js: the same toon material, outline shell and weapon builders.
+export { toon as heroToon, OUTLINE as HERO_OUTLINE };
+export function buildWeapon(id, group) { return WEAPONS[id] ? WEAPONS[id](group) : null; }

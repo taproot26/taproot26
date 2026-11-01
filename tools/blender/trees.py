@@ -24,9 +24,11 @@ import numpy as np
 OUT_DIR = Path(sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else ".").resolve()
 
 
-def hexc(h):
+def hexc(h, a=1.0):
+    """#rrggbb (sRGB, as on screen) -> linear RGBA, which is what Blender's colour inputs expect."""
     h = h.lstrip("#")
-    return [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)] + [1.0]
+    lin = lambda c: c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    return [lin(int(h[i:i + 2], 16) / 255) for i in (0, 2, 4)] + [a]
 
 
 def material(name, dark, light, kind):
@@ -197,9 +199,7 @@ def finish(name):
     ao = bake("AO", "ao")[:, :1]
     col = diff.copy()
     col[:, :3] = diff[:, :3] * (0.5 + 0.5 * ao)
-    grey = col[:, :3].mean(axis=1, keepdims=True)
-    col[:, :3] = np.clip(grey + (col[:, :3] - grey) * 1.4, 0, 1)  # keep it as punchy as the rest of the game
-    out = obj.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    out = obj.data.color_attributes.new("Col", "FLOAT_COLOR", "CORNER")
     for i, c in enumerate(out.data):
         c.color = col[i].tolist()
     for n in ("diff", "ao"):
