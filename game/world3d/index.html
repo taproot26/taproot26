@@ -115,6 +115,24 @@
   .tag.wood { background: #7a4a28; border-color: #3a2414; color: #fff2d0; box-shadow: 0 3px 0 #3a2414; }
   .tag small { max-width: 260px; white-space: normal; }
   .float { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); font-size: 20px; white-space: nowrap; text-shadow: 0 2px 0 #1a0a1a, 0 0 6px rgba(0, 0, 0, 0.6); }
+  /* multiplayer chat (bottom left, above the controls bar) */
+  #chat { position: fixed; z-index: 4; left: 12px; bottom: 58px; width: 340px; pointer-events: none; }
+  #chatLog { max-height: 150px; overflow-y: auto; scrollbar-width: none; pointer-events: auto; }
+  #chatLog::-webkit-scrollbar { display: none; }
+  .chat-msg { font: 700 14px/1.35 'Nunito', sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); padding: 1px 0; transition: opacity 0.6s; word-break: break-word; }
+  .chat-msg.fading { opacity: 0; }
+  .chat-msg.sys { color: #c8d8ff; font-style: italic; }
+  #chatRow { display: flex; gap: 6px; margin-top: 4px; pointer-events: auto; }
+  #chatRow[hidden] { display: none; }
+  #chatIn { flex: 1; padding: 6px 12px; border-radius: 999px; border: 2px solid var(--rim); background: rgba(18, 10, 30, 0.85); color: #fff; font: 700 14px 'Nunito', sans-serif; outline: none; }
+  #chatSend { padding: 6px 14px; border-radius: 999px; border: 2px solid #2a0a3a; background: var(--orange); color: #3a1200; font: 400 14px 'Lilita One', sans-serif; cursor: pointer; }
+  #mpText { display: inline-block; margin-top: 4px; padding: 3px 10px; border-radius: 999px; background: rgba(18, 10, 30, 0.7); font: 800 12px 'Nunito', sans-serif; color: #c8ffb0; }
+  .tag.player { color: #8ad8ff; border-color: rgba(90, 180, 255, 0.6); }
+  .bubble { position: absolute; left: 0; top: 0; max-width: 220px; padding: 6px 12px; border-radius: 14px; background: #fff; color: #2a1a3a; font: 800 14px/1.3 'Nunito', sans-serif; white-space: normal; text-align: center;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25); transition: opacity 0.4s; }
+  .bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-bottom: 0; border-top-color: #fff; }
+  #chatBtn { padding: 6px 12px; border-radius: 999px; font-size: 15px; background: linear-gradient(#8ad8ff, #3a8ae0); box-shadow: 0 3px 0 #1a4a8a; }
+  @media (max-width: 640px) { #chat { bottom: 64px; width: calc(100% - 120px); } }
   #fade { position: fixed; inset: 0; z-index: 9; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.7s; }
 
   @media (max-width: 640px) {
@@ -136,6 +154,7 @@ if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
 </script>
 <script src="/game/items.js"></script>
 <script src="/game/sprite.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -167,12 +186,18 @@ if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
 <div class="nitro"><span>&#9889;</span>NITRO<div class="bar"><div id="nitroFill"></div></div><span id="nitroText">Ready</span></div>
 <div class="actions">
   <button id="sailBtn" type="button" tabindex="-1" hidden>&#9973; Set sail<kbd>F</kbd></button>
+  <button id="chatBtn" type="button" tabindex="-1" aria-label="Chat">&#128172;<kbd>T</kbd></button>
   <button id="camBtn" type="button" tabindex="-1" aria-label="Camera view">&#127909;<kbd>C</kbd></button>
   <button id="bagBtn" type="button" tabindex="-1">Bag<kbd>B</kbd></button>
   <button id="jumpBtn" type="button" tabindex="-1" aria-label="Jump">JUMP</button>
   <button id="attackBtn" type="button" tabindex="-1" aria-label="Attack">&#9876;&#65039;</button>
 </div>
-<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>J</b> attack &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag</div>
+<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>J</b> attack &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag &middot; <b>T</b> chat</div>
+<div id="chat">
+  <div id="chatLog"></div>
+  <div id="chatRow" hidden><input id="chatIn" type="text" placeholder="Say something..." maxlength="200" autocomplete="off"><button id="chatSend" type="button">Send</button></div>
+  <div id="mpText">Connecting...</div>
+</div>
 <div class="chip toast" id="toast" hidden></div>
 
 <div class="shop" id="shopPanel" hidden>
@@ -2241,6 +2266,7 @@ function swing() {
   if (fainted || modal || attackCd > 0) return;
   attackCd = hero.caster ? hero.caster.cd : 0.36;
   P.atk = 0;
+  mp.atk = Math.round(performance.now()); // stamp the swing so other players see it once
   if (hero.caster) { setTimeout(castBall, 120); return; } // wands and staffs shoot instead
   // hits land when the swing connects (the hero draws the blade trail itself)
   setTimeout(() => {
@@ -2464,6 +2490,8 @@ function drawMinimap(now) {
     mctx.fillStyle = m.cfg.big ? '#c06aff' : '#ff9a2a';
     mctx.beginPath(); mctx.arc(m.x * MINI, m.z * MINI, m.cfg.big ? 3 : 2, 0, Math.PI * 2); mctx.fill();
   }
+  mctx.fillStyle = '#5ab4ff'; mctx.strokeStyle = '#ffffff'; mctx.lineWidth = 1;
+  for (const g of ghosts.values()) { mctx.beginPath(); mctx.arc(g.x * MINI, g.z * MINI, 3, 0, Math.PI * 2); mctx.fill(); mctx.stroke(); }
   mctx.translate(P.x * MINI, P.z * MINI);
   mctx.rotate(Math.atan2(Math.cos(P.heading), Math.sin(P.heading)));
   mctx.fillStyle = Math.floor(now / 350) % 2 ? '#c8ff2e' : '#ffffff';
@@ -2472,11 +2500,161 @@ function drawMinimap(now) {
   mctx.restore();
 }
 
+/* ---------- multiplayer: everyone on the same map sees each other, plus chat ----------
+   Supabase Realtime broadcast, like the 2D city, on its own channel because the 3D map uses
+   tile coordinates. Each client sends its position about 8 times a second while moving (and a
+   ping every 3 s); others ease toward it, so their heroes walk and turn smoothly. Players in the
+   mine or the workshop only see each other there (the 'room' field). */
+const MP_ROOM = UNDER ? 'cave' : INDOOR ? AREA : 'world';
+const mp = { id: Math.random().toString(36).slice(2, 10), live: false, last: 0, sent: null, atk: 0 };
+mp.name = (charData && charData.name && charData.name.trim()) || 'Wanderer';
+const ghosts = new Map();
+let chatOpen = false;
+const safeText = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const NAME_COLORS = ['#6ac86a', '#6a9ef0', '#f0a06a', '#f06a9e', '#6af0e0', '#c86af0', '#f0f06a', '#f06a6a'];
+const nameColor = (n) => NAME_COLORS[Math.abs([...n].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % NAME_COLORS.length];
+const myBubble = { el: null, until: 0 };
+function addBubble(holder, msg) {
+  if (!holder.el) { holder.el = document.createElement('div'); holder.el.className = 'bubble'; labelsEl.appendChild(holder.el); }
+  holder.el.textContent = msg;
+  holder.el.style.opacity = 1;
+  holder.until = performance.now() + 6000;
+}
+function chatLine(name, msg, sys) {
+  const el = document.createElement('div');
+  el.className = 'chat-msg' + (sys ? ' sys' : '');
+  el.innerHTML = sys ? safeText(msg) : `<b style="color:${nameColor(name)}">${safeText(name)}:</b> ${safeText(msg)}`;
+  const log = $('chatLog');
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  while (log.children.length > 30) log.firstChild.remove();
+  setTimeout(() => el.classList.add('fading'), 25000);
+  setTimeout(() => el.remove(), 30000);
+}
+function myState() {
+  return { id: mp.id, name: mp.name, char: charData, room: MP_ROOM, x: +P.x.toFixed(2), z: +P.z.toFixed(2), y: +P.y.toFixed(2), h: +P.heading.toFixed(2), atk: mp.atk };
+}
+function addGhost(d) {
+  if (d.id === mp.id || d.room !== MP_ROOM) return null;
+  let g = ghosts.get(d.id);
+  if (!g) {
+    const tag = document.createElement('div');
+    tag.className = 'tag player';
+    tag.textContent = d.name || 'Wanderer';
+    labelsEl.appendChild(tag);
+    g = { id: d.id, name: d.name || 'Wanderer', hero: makeHero(d.char || DEFAULT_CHAR), tag, bubble: { el: null, until: 0 }, x: d.x, z: d.z, y: 0, h: d.h || 0, tx: d.x, tz: d.z, ty: 0, th: d.h || 0, atk: -1, atkSeen: d.atk || 0 };
+    g.hero.root.position.set(d.x, 0, d.z); // start in place: the hero's springs read speed from how far the root moves
+    ghosts.set(d.id, g);
+    chatLine('', `${g.name} is here`, true);
+  }
+  return g;
+}
+function removeGhost(id) {
+  const g = ghosts.get(id);
+  if (!g) return;
+  scene.remove(g.hero.root);
+  g.tag.remove();
+  if (g.bubble.el) g.bubble.el.remove();
+  ghosts.delete(id);
+}
+function onState(d) {
+  const g = addGhost(d);
+  if (!g) { if (ghosts.has(d.id)) removeGhost(d.id); return; } // they walked into another room
+  Object.assign(g, { tx: d.x, tz: d.z, ty: d.y || 0, th: d.h || 0, seen: performance.now() });
+  if (d.atk && d.atk !== g.atkSeen) { g.atkSeen = d.atk; g.atk = 0; }
+}
+if (window.supabase) {
+  const sb = window.supabase.createClient('https://azvdqigaqwbeakjieaps.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dmRxaWdhcXdiZWFramllYXBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTE0NjEsImV4cCI6MjA5OTA2NzQ2MX0.QXBpcGKsot8A8w6rq76F6lvGjCVJN0NytDmfmE8C-Dw');
+  mp.channel = sb.channel('world3d-mp', { config: { broadcast: { self: false } } });
+  mp.channel
+    .on('broadcast', { event: 'join' }, ({ payload }) => {
+      const known = ghosts.has(payload.id);
+      onState(payload);
+      if (!known && payload.room === MP_ROOM) mp.channel.send({ type: 'broadcast', event: 'move', payload: myState() }); // say hi back
+    })
+    .on('broadcast', { event: 'move' }, ({ payload }) => onState(payload))
+    .on('broadcast', { event: 'leave' }, ({ payload }) => { const g = ghosts.get(payload.id); if (g) chatLine('', `${g.name} left`, true); removeGhost(payload.id); })
+    .on('broadcast', { event: 'chat' }, ({ payload }) => {
+      chatLine(payload.name, payload.msg);
+      const g = ghosts.get(payload.id);
+      if (g) addBubble(g.bubble, payload.msg);
+    })
+    .subscribe((status) => {
+      if (status !== 'SUBSCRIBED') return;
+      mp.live = true;
+      mp.channel.send({ type: 'broadcast', event: 'join', payload: myState() });
+    });
+  // keep-alive on a timer, so a player whose tab is in the background (no frames) doesn't vanish
+  setInterval(() => { if (mp.live && performance.now() - mp.last > 3000) { mp.channel.send({ type: 'broadcast', event: 'move', payload: myState() }); mp.last = performance.now(); } }, 3000);
+  addEventListener('pagehide', () => { if (mp.live) mp.channel.send({ type: 'broadcast', event: 'leave', payload: { id: mp.id } }); });
+}
+function sendChat() {
+  const txt = $('chatIn').value.trim().slice(0, 200);
+  $('chatIn').value = '';
+  if (!txt) return;
+  if (mp.live) mp.channel.send({ type: 'broadcast', event: 'chat', payload: { id: mp.id, name: mp.name, msg: txt } });
+  chatLine(mp.name, txt);
+  addBubble(myBubble, txt);
+}
+function openChat() {
+  chatOpen = true;
+  for (const k in keys) keys[k] = false; // stop walking while typing
+  $('chatRow').hidden = false;
+  $('chatIn').focus();
+}
+function closeChat() {
+  chatOpen = false;
+  $('chatRow').hidden = true;
+  $('chatIn').blur();
+}
+$('chatIn').addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Enter') { e.preventDefault(); sendChat(); closeChat(); }
+  if (e.key === 'Escape') closeChat();
+});
+$('chatSend').addEventListener('click', () => { sendChat(); closeChat(); });
+$('chatBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); chatOpen ? closeChat() : openChat(); });
+canvas.addEventListener('pointerdown', () => { if (chatOpen) closeChat(); });
+
+function updateMultiplayer(dt, now) {
+  if (mp.live) {
+    const st = myState(), prev = mp.sent;
+    const moved = !prev || Math.abs(st.x - prev.x) > 0.04 || Math.abs(st.z - prev.z) > 0.04 || Math.abs(st.y - prev.y) > 0.05 || Math.abs(wrapAngle(st.h - prev.h)) > 0.08 || st.atk !== prev.atk;
+    if (moved && now - mp.last > 120) { mp.channel.send({ type: 'broadcast', event: 'move', payload: st }); mp.sent = st; mp.last = now; }
+  }
+  for (const g of ghosts.values()) {
+    if (now - (g.seen || now) > 15000) { removeGhost(g.id); continue; }
+    g.x = damp(g.x, g.tx, 10, dt); g.z = damp(g.z, g.tz, 10, dt); g.y = damp(g.y, g.ty, 14, dt);
+    g.h += wrapAngle(g.th - g.h) * Math.min(1, dt * 12);
+    if (g.atk >= 0) { g.atk += dt / 0.38; if (g.atk >= 1) g.atk = -1; }
+    g.hero.root.position.set(g.x, g.y, g.z);
+    g.hero.root.rotation.y = g.h;
+    g.hero.update(dt, { atk: g.atk, air: g.y > 0.02 });
+    const near = Math.hypot(g.x - P.x, g.z - P.z) < 30, pos = near ? toScreen(g.x, HERO_H + 0.35 + g.y, g.z) : null;
+    g.tag.hidden = !pos;
+    if (pos) g.tag.style.transform = `translate(${pos[0]}px, ${pos[1]}px) translate(-50%, -100%)`;
+    placeBubble(g.bubble, near ? toScreen(g.x, HERO_H + 0.95 + g.y, g.z) : null, now);
+  }
+  placeBubble(myBubble, toScreen(P.x, HERO_H + 0.6 + P.y, P.z), now);
+  const n = 1 + [...ghosts.values()].length;
+  const txt = mp.live ? `${mp.name} · Online here: ${n}` : window.supabase ? 'Connecting...' : 'Offline';
+  if ($('mpText').textContent !== txt) $('mpText').textContent = txt;
+}
+function placeBubble(b, pos, now) {
+  if (!b.el) return;
+  const on = pos && now < b.until;
+  b.el.hidden = !on;
+  if (on) b.el.style.transform = `translate(${pos[0]}px, ${pos[1]}px) translate(-50%, -100%)`;
+}
+
 /* ---------- input: keyboard, drag to look, touch joystick on the left half ---------- */
 const keys = {};
 addEventListener('keydown', (e) => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
+  if (chatOpen) return; // typing: the chat box handles its own keys
+  if ((e.code === 'KeyT' || e.code === 'Enter') && !modal) { e.preventDefault(); openChat(); return; }
   keys[e.code] = true;
   if (modal) { if (e.code === 'Escape' || e.code === 'KeyF') closeModal(); return; } // a shop / crafting panel is open
   if (e.code === 'Space') jump();
@@ -2582,6 +2760,7 @@ function update(dt, now) {
   hero.root.visible = !(inv > 0 && Math.floor(inv / 0.08) % 2);
   attackCd -= dt;
   inv -= dt;
+  updateMultiplayer(dt, now);
 
   // monsters
   for (const mo of monsters) {
@@ -2793,7 +2972,7 @@ function update(dt, now) {
 
 SPAWN_LIST.forEach((type) => spawnMonster(type));
 // debug hook for tests and screenshots: __world3d.tp(x, z) teleports, .P is the player state
-window.__world3d = { P, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, size: [MAP_W, MAP_H] };
+window.__world3d = { P, ghosts, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, size: [MAP_W, MAP_H] };
 updateHud();
 renderBag();
 (function frame() {
