@@ -233,6 +233,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { makeHero3D } from '/game/lib/hero3d.js';
 import { SHOPS, SELL, RECIPES, CONSUMABLES } from './shops.js';
 
@@ -1447,8 +1448,28 @@ const seaMat = DAY ? toon({ color: '#3f86d8', emissive: '#0a2850' }) : toon({ co
 const signs = []; // named buildings get a floating sign
 const circles = []; // round colliders [x, z, r] on top of the tile grid
 const boats = [];   // { g, x, y, z, ph, sail? } bob on the water; sailing ones cruise back and forth
+// Style test: ?blender=1 swaps the town cottages for the Blender-built model (tools/blender/cottage.py).
+const BLENDER_COTTAGE = new URLSearchParams(location.search).has('blender')
+  ? (await new GLTFLoader().loadAsync('/game/assets3d/cottage.glb')).scene : null;
+function addModel(src, x, z, ry, sx, sz) {
+  const m = src.clone(true);
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = toon({ map: o.material.map });
+    o.castShadow = o.receiveShadow = true;
+  });
+  m.position.set(x, 0, z);
+  m.rotation.y = ry;
+  m.scale.set(sx, (sx + sz) / 2, sz);
+  scene.add(m);
+}
 placed.forEach(({ key, tx, ty, w, h, name, ry }) => {
   const r = hash(tx, ty, 71);
+  if (BLENDER_COTTAGE && TOWN && (key === 'house_a' || key === 'house_b')) {
+    if (name) signs.push({ x: tx + w / 2, z: ty + h / 2, y: 4.9, name });
+    addModel(BLENDER_COTTAGE, tx + w / 2, ty + h / 2, ry || 0, (w - 0.7) / 4.3, (h - 0.7) / 3.3);
+    return;
+  }
   if (A.sailing && /ship|sloop|rowboat/.test(key)) {
     boats.push({ g: buildGroup(() => BUILD[key](r, w, h)), x: tx + w / 2, y: 0, z: ty + h / 2, ph: r * 6 });
     return;
