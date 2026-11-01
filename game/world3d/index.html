@@ -1995,25 +1995,28 @@ let charData = (() => {
     return d;
   } catch (e) { return null; }
 })();
-// Local test helper: on localhost, ?loadout=dual puts the iron sword in the right hand and the
-// Inferno Staff in the left (both hand slots), and saves it to your character.
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).get('loadout') === 'dual' && charData) {
-  charData.equipment = Object.assign({}, charData.equipment, { rhand: 'iron_sword', lhand: 'inferno_staff' });
+// Local testing: on the local server your character always holds the iron sword and the Inferno Staff,
+// one in each hand (both hand slots); whichever one is missing goes in a free or non-weapon hand.
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && charData) {
+  const e = Object.assign({}, charData.equipment);
+  const want = ['iron_sword', 'inferno_staff'];
+  for (const id of want) {
+    if (e.rhand === id || e.lhand === id) continue;
+    const hand = !want.includes(e.rhand) ? 'rhand' : 'lhand';
+    e[hand] = id;
+  }
+  charData.equipment = e;
   try {
     localStorage.setItem('taproot_character', JSON.stringify(charData));
     const own = JSON.parse(localStorage.getItem('taproot_owned') || '[]');
-    for (const id of ['iron_sword', 'inferno_staff']) if (!own.includes(id)) own.push(id);
+    for (const id of want) if (!own.includes(id)) own.push(id);
     localStorage.setItem('taproot_owned', JSON.stringify(own));
-  } catch (e) {}
+  } catch (err) {}
 }
 const HERO_H = 1.55; // head-top height, for name tags
-// Style test: ?pixel=1 draws every hero as a live pixel sprite (see the pixel pass at the bottom).
-const PIXEL = new URLSearchParams(location.search).has('pixel');
-function toSpriteLayer(root) { if (PIXEL) root.traverse((o) => o.layers.set(1)); }
 function makeHero(look) {
   const h = makeHero3D(look);
   scene.add(h.root);
-  toSpriteLayer(h.root);
   return h;
 }
 document.querySelector('.avatar').style.background = `url(${SPRITE.renderDir(charData || DEFAULT_CHAR, 'down', 0, true).toDataURL()}) center 18% / 150% no-repeat, radial-gradient(circle at 35% 30%, #d8ff5a, #7ac400)`;
@@ -2121,7 +2124,6 @@ function makePlayerHero(look) {
   if (!BLENDER_HERO) return makeHero(look);
   const h = makeBlenderHero(look);
   scene.add(h.root);
-  toSpriteLayer(h.root);
   return h;
 }
 let hero = makePlayerHero(charData || DEFAULT_CHAR);
@@ -3098,73 +3100,10 @@ window.__world3d = { P, ghosts, monsters, drops, field: () => field, hero: () =>
 } };
 updateHud();
 renderBag();
-/* ---------- pixel-sprite heroes (?pixel=1) ----------
-   Heroes live on layer 1. Each frame they are rendered alone into a render target a quarter of the
-   screen's size (no smoothing), then laid over the finished world with a 1px dark outline around
-   the silhouette and the colours stepped down to a small palette, so they read like hand-drawn
-   pixel sprites while keeping their 3D animation, gear and shadows. They draw on top of the world. */
-const pixelPass = PIXEL ? (() => {
-  const SIZE = 4; // screen pixels per sprite pixel
-  const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { map: { value: rt.texture }, texel: { value: new THREE.Vector2() } },
-    transparent: true, depthTest: false, depthWrite: false,
-    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-    fragmentShader: `uniform sampler2D map; uniform vec2 texel; varying vec2 vUv;
-      void main() {
-        vec4 c = texture2D(map, vUv);
-        if (c.a < 0.5) {
-          float n = texture2D(map, vUv + vec2(texel.x, 0.0)).a + texture2D(map, vUv - vec2(texel.x, 0.0)).a
-                  + texture2D(map, vUv + vec2(0.0, texel.y)).a + texture2D(map, vUv - vec2(0.0, texel.y)).a;
-          if (n > 0.5) { gl_FragColor = vec4(0.09, 0.04, 0.13, 1.0); return; } // outline
-          discard;
-        }
-        vec3 col = pow(max(c.rgb, 0.0), vec3(1.0 / 2.2));
-        col = mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, 1.3); // sprite-bright colours
-        col = clamp((col - 0.5) * 1.12 + 0.52, 0.0, 1.0);
-        col = floor(col * 7.0 + 0.5) / 7.0; // a limited palette, like hand-picked sprite colours
-        gl_FragColor = vec4(col, 1.0);
-      }`,
-  });
-  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
-  quad.frustumCulled = false;
-  const oscene = new THREE.Scene(), ocam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  oscene.add(quad);
-  const fit = () => {
-    const w = Math.max(1, Math.round(innerWidth / SIZE)), h = Math.max(1, Math.round(innerHeight / SIZE));
-    rt.setSize(w, h);
-    mat.uniforms.texel.value.set(1 / w, 1 / h);
-  };
-  fit();
-  addEventListener('resize', fit);
-  sun.shadow.camera.layers.enable(1); // heroes still cast shadows on the world
-  camera.layers.set(0);
-  let lit = false;
-  const cc = new THREE.Color();
-  return () => {
-    if (!lit) { scene.traverse((o) => { if (o.isLight) o.layers.enable(1); }); lit = true; } // lights are filtered by layer too
-    const bg = scene.background, ca = renderer.getClearAlpha();
-    renderer.getClearColor(cc);
-    scene.background = null;
-    camera.layers.set(1);
-    renderer.setRenderTarget(rt);
-    renderer.setClearColor(0x000000, 0);
-    renderer.clear();
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-    renderer.setClearColor(cc, ca);
-    scene.background = bg;
-    camera.layers.set(0);
-    renderer.autoClear = false;
-    renderer.render(oscene, ocam);
-    renderer.autoClear = true;
-  };
-})() : null;
 (function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   update(dt, performance.now());
   composer.render();
-  if (pixelPass) pixelPass();
   requestAnimationFrame(frame);
 })();
 </script>
