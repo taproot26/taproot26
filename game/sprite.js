@@ -21,13 +21,13 @@
 
   /* ---------- body: shirt / sleeves / legs per armour piece ---------- */
   const OUTFITS = {
-    bare:         { shirt: '#d23c34', sleeves: 'short', pants: '#34509e', boots: '#3b3640', extra: 'tee' },
-    steel_armor:  { shirt: '#a3acb9', sleeve: '#7d8696', sleeves: 'long', gloves: '#8f98a6', pants: '#6a7280', boots: '#7f8896', belt: '#5a4632', buckle: '#e0b450', extra: 'knight' },
-    mage_robe:    { shirt: '#5b3f9a', sleeves: 'wide', boots: '#2e2244', belt: '#d9b04f', robe: true, extra: 'robe' },
-    ranger_tunic: { shirt: '#4f8a3c', sleeves: 'long', bracer: '#7a5230', pants: '#7a5a3a', boots: '#4a3020', bootTop: 40, belt: '#6b4a2e', buckle: '#e0b450', extra: 'ranger' },
-    rogue_tunic:  { shirt: '#3c3c4a', sleeves: 'long', bracer: '#26232e', pants: '#2c2c38', boots: '#1f1d26', bootTop: 41, belt: '#2a2430', buckle: '#9aa3b0', extra: 'rogue' },
-    chainmail:    { shirt: '#9aa3b0', sleeve: '#8a93a2', sleeves: 'long', gloves: '#8a93a2', pants: '#5a6270', boots: '#4a4450', belt: '#5a4632', buckle: '#c8ccd4', extra: 'chain' },
-    pirate_coat:  { shirt: '#b02a2c', sleeves: 'long', pants: '#2a2a34', boots: '#1f1d26', bootTop: 39, belt: '#1a1620', buckle: '#e0b450', extra: 'coat' },
+    bare:         { tex: 'cloth', shirt: '#d23c34', sleeves: 'short', pants: '#34509e', boots: '#3b3640', extra: 'tee' },
+    steel_armor:  { tex: 'plate', shirt: '#a3acb9', sleeve: '#7d8696', sleeves: 'long', gloves: '#8f98a6', pants: '#6a7280', boots: '#7f8896', belt: '#5a4632', buckle: '#e0b450', extra: 'knight' },
+    mage_robe:    { tex: 'fold', shirt: '#5b3f9a', sleeves: 'wide', boots: '#2e2244', belt: '#d9b04f', robe: true, extra: 'robe' },
+    ranger_tunic: { tex: 'cloth', shirt: '#4f8a3c', sleeves: 'long', bracer: '#7a5230', pants: '#7a5a3a', boots: '#4a3020', bootTop: 40, belt: '#6b4a2e', buckle: '#e0b450', extra: 'ranger' },
+    rogue_tunic:  { tex: 'cloth', shirt: '#3c3c4a', sleeves: 'long', bracer: '#26232e', pants: '#2c2c38', boots: '#1f1d26', bootTop: 41, belt: '#2a2430', buckle: '#9aa3b0', extra: 'rogue' },
+    chainmail:    { tex: 'mail', shirt: '#9aa3b0', sleeve: '#8a93a2', sleeves: 'long', gloves: '#8a93a2', pants: '#5a6270', boots: '#4a4450', belt: '#5a4632', buckle: '#c8ccd4', extra: 'chain' },
+    pirate_coat:  { tex: 'cloth', shirt: '#b02a2c', sleeves: 'long', pants: '#2a2a34', boots: '#1f1d26', bootTop: 39, belt: '#1a1620', buckle: '#e0b450', extra: 'coat' },
   };
   // Footwear recolours the boots themselves, so it works in every walk frame.
   const FEET_COLOR = { leather_boots: '#6b4226', swift_sandals: '#b07a46', iron_greaves: '#8f98a6', dragons_stride: '#7a1a24', sea_boots: '#26232e', shadow_treads: '#3a1a5a' };
@@ -183,6 +183,17 @@
       d.fill(28, 32, 33, 32, 'guard'); d.fill(28, 33, 28, 36, 'guard'); d.fill(33, 33, 33, 35, 'guard');   // basket guard
       d.fill(30, 33, 31, 38, 'grip');
     },
+    apprentice_wand(d) { WEAPONS.fire_wand(d); },
+    fire_wand(d) {
+      d.fill(30, 24, 31, 38, 'wand'); d.fill(29, 37, 32, 37, 'guard');
+      d.rows(20, [[30, 31], [29, 32], [29, 32], [30, 31]], 'wandGem');
+      sparks(d, [[27, 19], [34, 20], [33, 25]]);
+    },
+    inferno_staff(d) {
+      d.fill(30, 7, 31, 44, 'staffDark'); d.px(28, 5, 'guard'); d.px(33, 5, 'guard'); d.px(28, 4, 'guard'); d.px(33, 4, 'guard');
+      d.rows(1, [[30, 31], [29, 32], [29, 32], [29, 32], [30, 31]], 'flameOrb'); d.px(30, 2, 'flameHi');
+      sparks(d, [[27, 2], [34, 1], [34, 6], [26, 6]]);
+    },
     trident(d) {
       d.fill(30, 7, 31, 44, 'tridentShaft');
       d.fill(28, 6, 33, 7, 'prong'); d.fill(28, 1, 28, 5, 'prong'); d.fill(33, 1, 33, 5, 'prong'); d.fill(30, 0, 31, 5, 'prong');
@@ -277,15 +288,17 @@
       hair: { c: hc }, hairBack: { c: dark(hc) }, hairHi: { c: mix(hc, '#ffffff', 0.38), flat: true, base: 'hair' },
       hairDk: { c: dark(dark(hc)), flat: true, base: 'hair' },
 
-      body: { c: f.shirt }, arm: { c: f.sleeve || f.shirt }, pants: { c: f.pants || f.shirt }, boot: { c: FEET_COLOR[eq.feet] || f.boots },
+      body: { c: f.shirt, tex: f.tex }, arm: { c: f.sleeve || f.shirt, tex: f.tex }, pants: { c: f.pants || f.shirt, tex: f.tex === 'fold' ? 'cloth' : f.tex },
+      boot: { c: FEET_COLOR[eq.feet] || f.boots, tex: 'leather' },
+      pantsFar: { c: dark(f.pants || f.shirt), tex: 'cloth' }, bootFar: { c: dark(FEET_COLOR[eq.feet] || f.boots), tex: 'leather' },
       belt: { c: f.belt || f.shirt }, buckle: { c: f.buckle || '#e0b450', flat: true, base: 'belt' }, bracer: { c: f.bracer || f.shirt },
-      trim: { c: '#d9b04f' }, pauldron: { c: '#b4bcc8' }, tabard: { c: '#b2363a' }, emblem: { c: '#e8c060', flat: true, base: 'tabard' },
+      trim: { c: '#d9b04f' }, pauldron: { c: '#b4bcc8' }, tabard: { c: '#b2363a', tex: 'cloth' }, emblem: { c: '#e8c060', flat: true, base: 'tabard' },
       mail: { c: '#7d8696' }, strap: { c: '#6b4a2e' }, scarf: { c: '#5a3570' }, pouch: { c: '#6b4a2e' },
 
-      helm: { c: '#a9b2bf' }, helmDark: { c: '#6e7684' }, helmHi: { c: '#eef2f7', flat: true, base: 'helm' },
-      rivet: { c: '#e0b450', flat: true, base: 'helmDark' }, plume: { c: '#c23b3b' },
-      hat: { c: '#5b3f9a' }, hatBand: { c: '#d9b04f' }, brim: { c: '#4e3588' }, star: { c: '#ffe680', flat: true, base: 'hat' },
-      hood: { c: rogue ? '#3c3c4a' : '#4f8a3c' }, hoodIn: { c: rogue ? '#1c1a24' : '#24381d', flat: true }, mask: { c: '#26252f' },
+      helm: { c: '#a9b2bf', tex: 'plate' }, helmDark: { c: '#6e7684' }, helmHi: { c: '#eef2f7', flat: true, base: 'helm' },
+      rivet: { c: '#e0b450', flat: true, base: 'helmDark' }, plume: { c: '#c23b3b', tex: 'feather' },
+      hat: { c: '#5b3f9a', tex: 'fold' }, hatBand: { c: '#d9b04f' }, brim: { c: '#4e3588' }, star: { c: '#ffe680', flat: true, base: 'hat' },
+      hood: { c: rogue ? '#3c3c4a' : '#4f8a3c', tex: 'cloth' }, hoodIn: { c: rogue ? '#1c1a24' : '#24381d', flat: true }, mask: { c: '#26252f' },
       crown: { c: '#e0b450' }, gem: { c: '#e0302a', flat: true, base: 'crown' }, gem2: { c: '#3a7bd5', flat: true, base: 'crown' },
 
       blade: { c: blade[0] }, bladeHi: { c: blade[1], flat: true, base: 'blade' },
@@ -293,7 +306,9 @@
       staff: { c: '#7a5230' }, orb: { c: '#4fc3ff' }, orbHi: { c: '#e8fbff', flat: true, base: 'orb' },
       bow: { c: '#8b5e3c' }, string: { c: '#efe6cf', flat: true, noLine: true },
       quiver: { c: '#7a5230' }, fletch: { c: '#eae4d6' },
-      spark: { c: eq.rhand === 'oak_staff' ? '#9fe6ff' : '#ffc46a', flat: true, noLine: true, a: 0.85 },
+      spark: { c: eq.rhand === 'oak_staff' || eq.rhand === 'apprentice_wand' ? '#9fe6ff' : '#ffc46a', flat: true, noLine: true, a: 0.85 },
+      wand: { c: '#6a3a24' }, wandGem: { c: eq.rhand === 'apprentice_wand' ? '#6fd8ff' : '#ff6a2e' },
+      staffDark: { c: '#3a1a14' }, flameOrb: { c: '#ff6a2e' }, flameHi: { c: '#ffe08a', flat: true, base: 'flameOrb' },
 
       lens: { c: '#1a1422' }, lensIn: { c: '#2a3a5a', flat: true, base: 'lens' },
       lensBridge: { c: '#a0a8b4', flat: true, base: 'skin' },
@@ -395,6 +410,28 @@
   // --- Direction + walk-frame rendering for map sprites ---
 
   function paintDir(o, dir, frame) {
+    // Frame 2 is the other foot: front/back views mirror frame 1's legs, the side view
+    // keeps the stride but darkens the other leg so it reads as the far one.
+    if (frame === 2 && dir !== 'right') {
+      var s = paintDir(o, dir, 1), sg = s.g.slice();
+      var LEG = { pants: 1, boot: 1, pantsFar: 1, bootFar: 1 };
+      if (dir === 'left') {
+        for (var i = 35 * W; i < W * H; i++) {
+          var m = sg[i];
+          if (m === 'pants' || m === 'boot') sg[i] = (i % W) < 19 ? m + 'Far' : m;
+          else if (m === 'pantsFar' || m === 'bootFar') sg[i] = m.slice(0, -3);
+        }
+      } else {
+        for (var yy2 = 37; yy2 < H; yy2++) {
+          var row = sg.slice(yy2 * W, yy2 * W + W);
+          for (var xx2 = 0; xx2 < W; xx2++) {
+            if (LEG[row[xx2]]) sg[yy2 * W + xx2] = null;
+          }
+          for (var xx3 = 0; xx3 < W; xx3++) if (LEG[row[xx3]]) sg[yy2 * W + (W - 1 - xx3)] = row[xx3];
+        }
+      }
+      return { g: sg, M: s.M };
+    }
     if (dir === 'right') {
       var r = paintDir(o, 'left', frame);
       var fg = new Array(W * H).fill(null);
@@ -499,8 +536,8 @@
       } else {
         d.fill(12, 37, 16, Math.min(top, 44), 'pants');
         d.fill(12, Math.min(top + 1, 45), 16, 45, 'boot'); d.fill(11, 46, 16, 46, 'boot');
-        d.fill(22, 36, 26, Math.max(top - 2, 36), 'pants');
-        d.fill(22, Math.max(top - 1, 37), 26, 43, 'boot'); d.fill(22, 44, 27, 44, 'boot');
+        d.fill(22, 36, 26, Math.max(top - 2, 36), 'pantsFar');
+        d.fill(22, Math.max(top - 1, 37), 26, 43, 'bootFar'); d.fill(22, 44, 27, 44, 'bootFar');
       }
     }
     d.span(23, 15, 24, 'body'); d.fill(13, 24, 25, 34, 'body');
@@ -543,7 +580,7 @@
         d.fill(11, 6, 31, 10, 'hair');
         d.fill(25, 11, 31, 15, 'hair'); d.fill(26, 16, 30, 17, 'hair'); d.fill(27, 18, 29, 18, 'hair');
         d.fill(11, 11, 14, 13, 'hair');
-        d.px(7, 8, 'hair'); d.px(33, 7, 'hair'); d.px(10, 2, 'hair');
+        d.px(10, 7, 'hair'); d.px(32, 7, 'hair');
         [[14, 7], [20, 5], [26, 8]].forEach(function (p) { d.px(p[0], p[1], 'hairDk'); });
         d.rows(5, [[21, 22]], 'hairHi'); d.rows(4, [[12, 14]], 'hairHi');
       }
@@ -558,8 +595,88 @@
     if (HEADS[eq.head]) HEADS[eq.head](d);
   }
 
-  function renderDir(o, dir, frame) {
+  // --- HD (2x) map sprites ---
+  // The material grid is doubled with Scale2x (smooths stair-step diagonals and
+  // silhouettes), then shaded at 80 x 96: a 1px deep shade + 1px shade on the
+  // bottom-right of every region, a 1px highlight + 1px light on the top-left,
+  // a specular glint on metal, strands in the hair and a tinted iris.
+  const METALS = new Set(['helm', 'helmDark', 'blade', 'pauldron', 'mail', 'guard', 'crown', 'hook', 'prong', 'shieldBoss', 'lens']);
+  const deep = (c) => mix(dark(c), '#140c22', 0.3);
+  const glint = (c) => mix(lite(c), '#ffffff', 0.45);
+
+  // Surface detail for the inside of a region (edges are already shaded).
+  const TEX = {
+    plate: (c, x, y) => (y % 9 === 0 ? dark(c) : y % 9 === 1 ? lite(c) : c),
+    mail: (c, x, y) => ((x + y * 2) % 4 === 0 ? dark(c) : (x + y * 2) % 4 === 2 ? lite(c) : c),
+    fold: (c, x, y) => (x % 9 === 0 ? dark(c) : x % 9 === 1 ? mix(c, dark(c), 0.4) : x % 9 === 3 && y % 2 ? mix(c, lite(c), 0.5) : c),
+    cloth: (c, x, y) => ((x + y) % 4 === 0 && (x - y) % 4 === 0 ? mix(c, dark(c), 0.35) : c),
+    leather: (c, x, y) => ((x * 7 + y * 3) % 11 === 0 ? lite(c) : c),
+    feather: (c, x, y) => ((x - y) % 3 === 0 ? mix(c, dark(c), 0.45) : c),
+  };
+
+  function scale2x(g) {
+    var w = W * 2, out = new Array(w * H * 2).fill(null);
+    var at = function (x, y) { return (x >= 0 && y >= 0 && x < W && y < H ? g[y * W + x] : null); };
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      var P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1);
+      var o = (y * 2) * w + x * 2;
+      out[o] = C === A && C !== D && A !== B ? A : P;
+      out[o + 1] = A === B && A !== C && B !== D ? B : P;
+      out[o + w] = D === C && D !== B && C !== A ? C : P;
+      out[o + w + 1] = B === D && B !== A && D !== C ? D : P;
+    }
+    return out;
+  }
+
+  function renderHD(gm) {
+    var w = W * 2, h = H * 2, g = scale2x(gm.g), M = gm.M;
+    var at = function (x, y) { return (x >= 0 && y >= 0 && x < w && y < h ? g[y * w + x] : null); };
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgba(18, 10, 30, 0.3)';      // ground shadow, rounded
+    ctx.fillRect(24, 92, 32, 2); ctx.fillRect(20, 93, 40, 1); ctx.fillRect(28, 94, 24, 2);
+    var img = ctx.getImageData(0, 0, w, h), out = img.data;
+    var put = function (i, col, a) {
+      if (a === undefined) a = 1;
+      var rgb = hex(col), k = i * 4, t = a + (out[k + 3] / 255) * (1 - a);
+      out[k] = rgb[0]; out[k + 1] = rgb[1]; out[k + 2] = rgb[2]; out[k + 3] = Math.round(t * 255);
+    };
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var k = at(x, y), i = y * w + x;
+      if (k) {
+        var m = M[k];
+        if (m.flat) {
+          var fc = m.c;
+          if (k === 'eye' && at(x, y - 3) === 'eye' && at(x, y + 1) !== 'eye') fc = '#4a3a7a';   // iris catches light at the bottom
+          put(i, fc, m.a || 1);
+          continue;
+        }
+        var same = function (dx, dy) { var n = at(x + dx, y + dy); return n === k || (n && M[n].base === k); };
+        var col = m.c;
+        if (k === 'skin' && (CAST.has(at(x, y - 1)) || CAST.has(at(x, y - 2)))) col = dark(m.c);
+        else if (!same(1, 0) || !same(0, 1)) col = deep(m.c);
+        else if (!same(2, 0) || !same(0, 2) || (!same(4, 0) && same(-4, 0))) col = dark(m.c);
+        else if (!same(-1, 0) || !same(0, -1)) col = METALS.has(k) ? glint(m.c) : mix(lite(m.c), '#ffffff', 0.12);
+        else if (!same(-2, 0) || !same(0, -2)) col = lite(m.c);
+        else if (METALS.has(k) && !same(-4, -4) && same(4, 4)) col = glint(m.c);   // specular streak near the top-left
+        else if ((k === 'hair' || k === 'hairBack') && (x * 3 + y) % 7 === 0) col = mix(m.c, dark(m.c), 0.6);
+        else if (m.tex) col = TEX[m.tex](m.c, x, y);
+        put(i, col);
+      } else {
+        for (var di = 0; di < 4; di++) {
+          var dd = [[0, 1], [0, -1], [-1, 0], [1, 0]][di];
+          var n = at(x + dd[0], y + dd[1]);
+          if (n && !M[n].noLine) { put(i, line(M[n].base ? M[M[n].base].c : M[n].c)); break; }
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  }
+
+  function renderDir(o, dir, frame, hd) {
     var gm = paintDir(o, dir, frame), g = gm.g, M = gm.M;
+    if (hd) return renderHD(gm);
     var at = function (x, y) { return (x >= 0 && y >= 0 && x < W && y < H ? g[y * W + x] : null); };
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var ctx = c.getContext('2d');
@@ -594,11 +711,13 @@
     return c;
   }
 
-  function renderAll(o) {
+  // hd = true gives the 80 x 96 versions (show them at half the size of the normal ones).
+  function renderAll(o, hd) {
     var r = {};
     ['down', 'up', 'left', 'right'].forEach(function (dir) {
-      r[dir + '_0'] = renderDir(o, dir, 0);
-      r[dir + '_1'] = renderDir(o, dir, 1);
+      r[dir + '_0'] = renderDir(o, dir, 0, hd);
+      r[dir + '_1'] = renderDir(o, dir, 1, hd);
+      r[dir + '_2'] = renderDir(o, dir, 2, hd);
     });
     return r;
   }

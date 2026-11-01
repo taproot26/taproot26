@@ -1,0 +1,14 @@
+{
+  "grid": { "nx": 8, "ny": 8 },
+  "plaza": [3, 3],
+  "megaplots": [
+    { "bx": 0, "by": 0, "bw": 2, "bh": 2 }
+  ],
+  "blocks": {
+    "2,2": {
+      "type": "bigplot",
+      "gate": "south",
+      "props": []
+    }
+  }
+}

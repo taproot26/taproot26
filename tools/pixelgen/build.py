@@ -5,7 +5,7 @@
     python3 tools/pixelgen/build.py items loot # just these
 
 Generators write to tools/pixelgen/out/<set>; INSTALL copies what the game
-loads into game/. Sets with no entry (market, interior, coast, cave) are previews and
+loads into game/. Sets with no entry (market, interior, coast) are previews and
 source art only until a map uses them.
 """
 import importlib
@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 GAME = HERE.parent.parent / "game"
 sys.path.insert(0, str(HERE))
 
-GENERATORS = ["market", "interior", "interior_mart", "monsters", "loot", "coast", "items", "city3d", "valley", "cave"]
+GENERATORS = ["market", "interior", "interior_mart", "monsters", "loot", "coast", "items", "city3d", "valley", "cave", "city"]
 INSTALL = {
     "monsters": ("monsters", GAME / "world/assets/monsters", ["monsters.png", "king_slime.png", "slash.png"]),
     "loot": ("loot", GAME / "world/assets/loot", ["loot.png", "coin.png", "gold.png", "slime_gel.png", "spore_cap.png",
@@ -28,6 +28,11 @@ INSTALL = {
     "coast": ("coast", GAME / "world/assets/coast", [f"{k}.png" for k in (
         "dock", "dock_edge_s", "dock_side_w", "dock_side_e", "quay_top", "quay_face", "tavern", "lighthouse", "pirate_ship", "sloop",
         "rowboat", "palm", "barrel", "crate", "sack", "cannon", "rope_coil", "anchor", "chest", "bollard", "buoy", "crab", "seagull")]),
+    "cave": ("cave", GAME / "world/assets/cave", ["cave_ground.png", "cave_map.json"] + [f"{k}.png" for k in (
+        "cave_entrance", "crystal_blue", "crystal_purple", "glowshrooms", "node_gold", "node_iron", "node_crystal", "stalagmite_big",
+        "stalagmite_small", "boulders", "minecart", "beam", "bones", "cobweb", "puddle", "pickaxe", "torch_0", "torch_1", "track_h",
+        "track_v")]),
+    "city": ("city", GAME / "city/assets/plots", None),
 }
 
 

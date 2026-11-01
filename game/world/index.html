@@ -57,7 +57,7 @@ if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
 </head>
 <body>
 <div id="game"></div>
-<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">Go to the city</a><span class="hint"><br>Arrow keys / WASD to move, Shift to run, Space to attack, B for bag</span>
+<div class="hud"><a href="/game/">Back</a> &middot; <a href="/game/city/">Go to the city</a> &middot; <a href="/game/world3d/" onclick="this.href += location.search">3D view</a><span class="hint"><br>Arrow keys / WASD to move, Shift to run, Space to attack, B for bag</span>
   <div class="stats"><div class="hpbar"><div id="hpFill"></div></div><span id="hpText"></span><div id="xpText"></div></div>
 </div>
 <div class="controls">
@@ -73,10 +73,10 @@ if (!localStorage.getItem('taproot_session')) window.location.replace('/game/');
 /* ============================================================================
    Gen 3 style overworld (Phaser 3, 16x16 tiles, pixelArt: true)
 
-   ART: assets/objects.webp (props + tiles) and assets/player.webp (8 poses).
-   Both sheets have the checkerboard painted in as real pixels, so keyOut()
-   removes it at load, then each sprite is cut out (SHEET / PLAYER_SHEET hold
-   the pixel rects) and shrunk to its in-game size (the *_H tables).
+   ART: assets/objects.webp (props + tiles); the player comes from /game/sprite.js.
+   The sheet has the checkerboard painted in as real pixels, so keyOut()
+   removes it at load, then each sprite is cut out (SHEET holds the pixel
+   rects) and shrunk to its in-game size (the *_H tables).
 
    SWAPPING IN REAL ASSETS / A TILED MAP LATER
    - Real art: drop real sprites in and replace buildTextures() with plain
@@ -108,17 +108,18 @@ const SPRITE_H = {
   tall_a: 19, tall_b: 19, tall_dry: 19, tree_round: 44, tree_pine: 46, bush: 20, stump_tall: 17, stump_short: 14,
   boulder: 17, fence: 16, house_a: 85, house_b: 70, flower_white: 13, flower_pink: 13, flower_yellow: 13, flower_blue: 12,
 };
-// player.webp: down, down, left, left, right, right, up, up
-const PLAYER_SHEET = [[105, 60, 133, 276], [373, 62, 132, 273], [639, 66, 130, 269], [904, 67, 130, 269],
-  [101, 409, 131, 270], [366, 409, 130, 270], [641, 412, 128, 270], [907, 414, 127, 271]];
-const PLAYER_DIRS = ['down', 'left', 'right', 'up'];
 const VALLEY = ['grass', 'sand', 'water', 'forest', 'beach', 'tree_round', 'tree_pine', 'tree_oak', 'bush', 'stump_tall', 'stump_short', 'boulder',
   'fence', 'fence_post', 'house_a', 'house_b', 'flower_white', 'flower_pink', 'flower_yellow', 'flower_blue', 'tall_a', 'tall_b', 'tall_dry',
   'fern', 'log', 'mushrooms'];
 // Port art from tools/pixelgen/coast.py (the dock tiles are 16x16 and painted into the ground).
 const COAST = ['dock', 'dock_edge_s', 'dock_side_w', 'dock_side_e', 'quay_top', 'quay_face', 'tavern', 'lighthouse', 'pirate_ship', 'sloop',
   'rowboat', 'palm', 'barrel', 'crate', 'sack', 'cannon', 'rope_coil', 'anchor', 'chest', 'bollard', 'buoy', 'crab', 'seagull'];
-const CHAR_H = 26, CHAR_W = 14;
+// Mine art from tools/pixelgen/cave.py (the cave's ground is baked into one image from its tile grid).
+const CAVE = ['cave_entrance', 'crystal_blue', 'crystal_purple', 'glowshrooms', 'node_gold', 'node_iron', 'node_crystal', 'stalagmite_big',
+  'stalagmite_small', 'boulders', 'minecart', 'beam', 'bones', 'cobweb', 'puddle', 'pickaxe', 'torch_0', 'torch_1', 'track_h', 'track_v'];
+// Who you play when no character has been made yet (same look as the creator's default).
+const DEFAULT_CHAR = { skin: 1, hc: 0, hs: 'short', equipment: {} };
+const STEPS = [1, 0, 2, 0]; // step, stand, other step, stand
 
 /* ---------- areas (tile coordinates) ----------
    One page serves every outdoor area: /game/world/?area=woods. Each area lists
@@ -142,6 +143,7 @@ const AREAS = {
       [0, 19, 6, 19.5, 2.6], [6, 19.5, 10, 23.5, 2.4], [10, 23.5, 16, 28, 2.3], [16, 28, 20, 33, 2.4], [20, 33, 21, 36, 2.4],
       [24.5, 21, 20, 25, 2.0], [20, 25, 16, 28, 2.0],
       [4, 15.5, 8, 14.6, 1.4], [8, 14.6, 13, 13.5, 1.5], [13, 13.5, 17, 11, 1.6],
+      [19.5, 31, 26, 33.2, 1.0], [26, 33.2, 36, 33.2, 0.9], // spur to the mine
     ],
     ponds: [
       { cx: 5.5, cy: 5.6, rx: 5.6, ry: 3.5 },
@@ -149,7 +151,8 @@ const AREAS = {
       { cx: 47.5, cy: 33.5, rx: 5.2, ry: 4.6, murky: true },
     ],
     tall: [[11, 15, 21, 23, 'g'], [34, 15, 44, 23, 'g'], [28, 3, 35, 9, 'g'], [24, 28, 29, 33, 'g'], [10, 30, 14, 33, 'd'], [2, 22, 6, 26, 'd']],
-    objects: [['house_a', 36, 3, 5, 4], ['house_b', 2, 12, 4, 3]],
+    objects: [['house_a', 36, 3, 5, 4], ['house_b', 2, 12, 4, 3], ['cave_entrance', 34, 31, 4, 2]],
+    doors: [{ x: 35, y: 32, w: 2, h: 1, href: '/game/world/?area=cave&from=fields' }], // the mine mouth (walkable, leads inside)
     start: { x: 24, y: 19 },
     bushes: [[10, 11], [2, 17], [44, 9], [45, 20], [7, 28], [9, 30], [8, 33], [11, 29], [6, 31], [36, 34], [39, 33], [43, 27], [14, 22], [27, 10]],
     stumps: [[22, 8, 'tall'], [31, 18, 'short'], [8, 20, 'short'], [41, 12, 'tall'], [18, 30, 'short']],
@@ -166,8 +169,35 @@ const AREAS = {
     treeKind: (x, y) => (hash(x, y, 61) > 0.3 ? 'tree_pine' : 'tree_round'),
     fences: [[40, 47, 13], [26, 39, 25], [41, 47, 25]], // x1, x2, row
     exits: [{ edge: 'n', range: [22, 25], href: '/game/city/?from=world' }], // lines up with the city's south gate
-    arrive: { city: { x: 23.5, y: 1 } },
+    arrive: { city: { x: 23.5, y: 1 }, cave: { x: 35.5, y: 32.6 } },
     spawn: ['slime', 'slime', 'slime', 'slime', 'shroom', 'shroom', 'shroom', 'bat', 'bat', 'goblin', 'goblin', 'king'],
+  },
+
+  // The mine under the south field. Walls and water come from cave_map.json, not from paths and ponds.
+  cave: {
+    title: 'Taproot Mine',
+    map: true,
+    dark: 0.62, // ambient darkness; `lights` cut holes in it (tile coords, radius in px)
+    paths: [], ponds: [], tall: [], bushes: [], stumps: [], flowers: [], trees: [], treeKind: () => 'tree_pine',
+    objects: [
+      ['crystal_blue', 7, 8, 2, 1], ['crystal_purple', 42, 6, 2, 1], ['crystal_blue', 43, 29, 2, 1],
+      ['stalagmite_big', 18, 7, 1, 1], ['stalagmite_big', 27, 24, 1, 1], ['stalagmite_big', 35, 9, 1, 1],
+      ['stalagmite_small', 8, 18, 1, 1], ['stalagmite_small', 36, 20, 1, 1], ['stalagmite_small', 13, 30, 1, 1],
+      ['node_gold', 19, 11, 2, 1], ['node_iron', 8, 25, 2, 1], ['node_crystal', 36, 12, 2, 1], ['node_gold', 15, 29, 2, 1], ['node_iron', 40, 30, 2, 1],
+      ['boulders', 26, 9, 2, 1], ['boulders', 43, 19, 2, 1], ['minecart', 12, 15, 2, 1],
+      ['barrel', 28, 26, 1, 1], ['crate', 29, 26, 1, 1], ['chest', 8, 4, 1, 1],
+    ],
+    props: [ // walk-through decor: key, tx, ty (bottom-centred on the tile)
+      ['glowshrooms', 35, 23], ['glowshrooms', 44, 25], ['glowshrooms', 9, 13], ['glowshrooms', 33, 30],
+      ['bones', 17, 25], ['bones', 39, 16], ['puddle', 12, 8], ['pickaxe', 21, 12], ['cobweb', 4, 6], ['beam', 21, 31],
+    ],
+    tracks: [[5, 15, 20, 15], [21, 15, 21, 35]], // x1, y1, x2, y2: straight runs
+    torches: [[14, 5], [22, 5], [39, 3], [34, 17], [43, 17]], // on wall faces
+    lights: [[7.5, 8, 44], [43, 6, 44], [44, 29, 44], [35, 23, 34], [44, 25, 34], [9, 13, 34], [33, 30, 34], [37, 12, 34], [22.5, 35.5, 70]],
+    start: { x: 22, y: 33 },
+    exits: [{ edge: 's', range: [20, 24], href: '/game/world/?area=fields&from=cave' }],
+    arrive: { fields: { x: 22, y: 33 } },
+    spawn: ['bat', 'bat', 'bat', 'bat', 'bat', 'slime', 'slime', 'shroom', 'shroom', 'shroom', 'goblin', 'goblin'],
   },
 
   woods: {
@@ -337,7 +367,6 @@ function shrink(src, sx, sy, sw, sh, tw, th, crisp = true) {
 
 function buildTextures(scene) {
   const objects = keyOut(scene.textures.get('sheet_objects').getSourceImage());
-  const player = keyOut(scene.textures.get('sheet_player').getSourceImage());
 
   Object.keys(SPRITE_H).forEach((name) => {
     if (scene.textures.exists(name)) return;
@@ -346,25 +375,11 @@ function buildTextures(scene) {
   });
 
   const charData = (() => { try { var d = JSON.parse(localStorage.getItem('taproot_character')); if (d && d.equipment) { var e = d.equipment; if (e.weapon) { e.rhand = e.rhand || e.weapon; delete e.weapon; } if (e.hands) { e.rhand = e.rhand || e.hands; delete e.hands; } } return d; } catch (e) { return null; } })();
-  if (charData && typeof SPRITE !== 'undefined') {
-    const all = SPRITE.renderAll(charData);
-    const cw = Math.round(SPRITE.W * CHAR_H / SPRITE.H);
-    Object.entries(all).forEach(([key, canvas]) => {
-      const c = canvasOf(cw, CHAR_H), x = c.getContext('2d');
-      x.imageSmoothingEnabled = false;
-      x.drawImage(canvas, 0, 0, cw, CHAR_H);
-      scene.textures.addCanvas('player_' + key, c);
-    });
-  } else {
-    const f = CHAR_H / 271;
-    PLAYER_SHEET.forEach(([sx, sy, sw, sh], i) => {
-      const tw = Math.round(sw * f), th = Math.round(sh * f);
-      const c = canvasOf(CHAR_W, CHAR_H + 1), x = c.getContext('2d');
-      x.drawImage(shrink(player, sx, sy, sw, sh, tw, th), Math.round((CHAR_W - tw) / 2), CHAR_H + 1 - th);
-      const dir = PLAYER_DIRS[i >> 1], n = i & 1;
-      scene.textures.addCanvas(`player_${dir}_${n}`, c);
-    });
-  }
+  // The character is drawn at 40x48 (shown at half scale) and at 80x96 HD (quarter scale, used at zoom 4),
+  // so it always lands on whole screen pixels.
+  const me = charData || DEFAULT_CHAR;
+  Object.entries(SPRITE.renderAll(me)).forEach(([key, canvas]) => scene.textures.addCanvas('player_' + key, canvas));
+  Object.entries(SPRITE.renderAll(me, true)).forEach(([key, canvas]) => scene.textures.addCanvas('player_hd_' + key, canvas));
 
   scene.textures.addCanvas('spark', (() => { const c = canvasOf(2, 2); c.getContext('2d').fillStyle = '#fff'; c.getContext('2d').fillRect(0, 0, 2, 2); return c; })());
 
@@ -423,10 +438,14 @@ class Overworld extends Phaser.Scene {
 
   preload() {
     this.load.image('sheet_objects', '/game/world/assets/objects.webp');
-    this.load.image('sheet_player', '/game/world/assets/player.webp');
     // Farm-valley art from tools/pixelgen/valley.py; these keys replace the cut-outs from objects.webp.
     VALLEY.forEach((k) => this.load.image(k, `/game/world/assets/valley/${k}.png`));
-    if (PLANKS.length || A.critters) COAST.forEach((k) => this.load.image(k, `/game/world/assets/coast/${k}.png`));
+    if (PLANKS.length || A.critters || A.map) COAST.forEach((k) => this.load.image(k, `/game/world/assets/coast/${k}.png`));
+    if (A.map || A.doors) CAVE.forEach((k) => this.load.image(k, `/game/world/assets/cave/${k}.png`));
+    if (A.map) {
+      this.load.image('ground', '/game/world/assets/cave/cave_ground.png');
+      this.load.json('cave_map', '/game/world/assets/cave/cave_map.json');
+    }
     this.load.spritesheet('monsters', '/game/world/assets/monsters/monsters.png', { frameWidth: 24, frameHeight: 24 });
     this.load.spritesheet('king', '/game/world/assets/monsters/king_slime.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('slash', '/game/world/assets/monsters/slash.png', { frameWidth: 24, frameHeight: 24 });
@@ -444,6 +463,7 @@ class Overworld extends Phaser.Scene {
     this.addCharacters();
     this.addSparkles();
     this.addCritters();
+    this.addCaveDecor();
     document.title = A.title;
     this.buildMinimap();
     this.setupCombat();
@@ -451,9 +471,15 @@ class Overworld extends Phaser.Scene {
     const cam = this.cameras.main;
     const zoom = () => Math.max(2, Math.min(4, Math.floor(Math.min(window.innerWidth / 320, window.innerHeight / 220))));
     cam.setBounds(0, 0, MAP_W * T, MAP_H * T);
-    cam.setZoom(zoom());
+    const fit = () => {
+      const z = zoom();
+      cam.setZoom(z);
+      this.charKey = z === 4 ? 'player_hd_' : 'player_';
+      this.player.setScale(z === 4 ? 0.25 : 0.5);
+    };
+    fit();
     cam.startFollow(this.player, true, 0.2, 0.2);
-    this.scale.on('resize', () => cam.setZoom(zoom()));
+    this.scale.on('resize', fit);
 
     const K = Phaser.Input.Keyboard.KeyCodes;
     this.keys = this.input.keyboard.addKeys({
@@ -482,6 +508,7 @@ class Overworld extends Phaser.Scene {
 
   placeObjects() {
     for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (isWaterCell(x, y)) this.blocked[y][x] = true;
+    if (A.map) this.cache.json.get('cave_map').rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') this.blocked[y][x] = true; }));
 
     // A quay's bottom row is its stone face: a wall, except where a pier runs off it.
     PLANKS.forEach(([x1, , x2, y2, kind]) => {
@@ -489,6 +516,7 @@ class Overworld extends Phaser.Scene {
       for (let x = x1; x <= x2; x++) if (!PLANKS.some(([a, b, c, d, k]) => k === 'dock' && x >= a && x <= c && y2 >= b && y2 <= d)) this.blocked[y2][x] = true;
     });
     A.objects.forEach(([key, x, y, w, h]) => this.addObject(key, x, y, w, h));
+    (A.doors || []).forEach((d) => { for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) this.blocked[y][x] = false; });
 
     // Fence pieces overlap by one post so a run reads as one continuous fence.
     FENCES.forEach(([x1, x2, row]) => {
@@ -523,6 +551,10 @@ class Overworld extends Phaser.Scene {
   }
 
   paintGround() {
+    if (A.map) { // baked by tools/pixelgen/cave.py
+      this.add.image(0, 0, 'ground').setOrigin(0).setDepth(0);
+      return;
+    }
     const w = MAP_W * T, h = MAP_H * T;
     const tex = this.textures.createCanvas('ground', w, h);
     const ctx = tex.getContext();
@@ -631,10 +663,50 @@ class Overworld extends Phaser.Scene {
     });
   }
 
+  // Mine extras: track runs, walk-through props, flickering wall torches, and darkness with light pools.
+  addCaveDecor() {
+    (A.tracks || []).forEach(([x1, y1, x2, y2]) => {
+      for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) this.add.image(x * T, y * T, y1 === y2 ? 'track_h' : 'track_v').setOrigin(0).setDepth(1);
+    });
+    (A.props || []).forEach(([key, tx, ty]) => {
+      const y = (ty + 1) * T;
+      this.add.image(tx * T + 8, y, key).setOrigin(0.5, 1).setDepth(key === 'cobweb' ? 2 : y);
+    });
+    const torches = (A.torches || []).map(([tx, ty]) => this.add.image(tx * T + 8, (ty + 1) * T - 1, 'torch_0').setOrigin(0.5, 1).setDepth((ty + 1) * T));
+    if (torches.length) {
+      let f = 0;
+      this.time.addEvent({ delay: 160, loop: true, callback: () => { f ^= 1; torches.forEach((t, i) => t.setTexture(`torch_${f ^ (i & 1)}`)); } });
+    }
+    if (!A.dark) return;
+
+    // Banded radial brush (keeps the pixel-art look); erasing it from the dark layer makes a light.
+    const R = 64, c = canvasOf(R * 2, R * 2), x = c.getContext('2d'), img = x.createImageData(R * 2, R * 2);
+    for (let py = 0; py < R * 2; py++) for (let px = 0; px < R * 2; px++) {
+      const d = Math.hypot(px + 0.5 - R, py + 0.5 - R) / R;
+      img.data[(py * R * 2 + px) * 4 + 3] = d < 1 ? Math.round(Math.min(1, (1 - d) * 1.6) * 4) / 4 * 255 : 0;
+    }
+    x.putImageData(img, 0, 0);
+    this.textures.addCanvas('light', c);
+    this.lightBrush = this.make.image({ key: 'light', add: false });
+    this.lights2 = [
+      ...(A.torches || []).map(([tx, ty]) => [tx * T + 8, (ty + 1) * T - 10, 72]),
+      ...(A.lights || []).map(([tx, ty, r]) => [tx * T + 8, ty * T + 8, r]),
+    ];
+    this.dark = this.add.renderTexture(0, 0, MAP_W * T, MAP_H * T).setOrigin(0).setDepth(8800);
+  }
+
+  drawDarkness(time) {
+    if (!this.dark) return;
+    const b = this.lightBrush, flick = 1 + Math.sin(time / 90) * 0.03;
+    this.dark.clear().fill(0x0c0816, A.dark);
+    this.lights2.forEach(([x, y, r]) => this.dark.erase(b.setPosition(x, y).setScale((r * flick) / 64)));
+    this.dark.erase(b.setPosition(this.player.x, this.player.y - 8).setScale(56 / 64));
+  }
+
   addCharacters() {
     const from = new URLSearchParams(location.search).get('from');
     const spawn = A.arrive[from] || START;
-    this.player = this.add.sprite(spawn.x * T + 8, spawn.y * T + 12, 'player_down_0').setOrigin(0.5, 1);
+    this.player = this.add.sprite(spawn.x * T + 8, spawn.y * T + 12, 'player_down_0').setOrigin(0.5, 1).setScale(0.5);
   }
 
   addSparkles() {
@@ -982,20 +1054,21 @@ class Overworld extends Phaser.Scene {
     } else {
       this.walkT = 0;
     }
-    // Two frames per direction: swap them while walking, rest on the first one.
-    const frame = moving ? Math.floor(this.walkT / (run ? 110 : 170)) % 2 : 0;
-    p.setTexture(`player_${this.facing}_${frame}`);
+    const frame = moving ? STEPS[Math.floor(this.walkT / (run ? 90 : 140)) % 4] : 0;
+    p.setTexture(`${this.charKey}${this.facing}_${frame}`);
     p.setDepth(p.y);
 
     // Walk off the map through an opening -> the neighbouring area.
     const gx = Math.floor(p.x / T), gy = Math.floor((p.y - 3) / T);
     const exit = A.exits.find(({ edge, range: [a, b] }) =>
       edge === 'n' ? p.y <= T + 2 && gx >= a && gx <= b : edge === 's' ? p.y >= MAP_H * T - 2 && gx >= a && gx <= b
-        : (edge === 'w' ? p.x <= 7 : p.x >= MAP_W * T - 7) && gy >= a && gy <= b);
+        : (edge === 'w' ? p.x <= 7 : p.x >= MAP_W * T - 7) && gy >= a && gy <= b)
+      || (A.doors || []).find((d) => gx >= d.x && gx < d.x + d.w && gy >= d.y && gy < d.y + d.h);
     if (!this.leaving && exit) {
       this.leaving = true;
       window.location.href = exit.href;
     }
+    this.drawDarkness(time);
     this.updateCombat(delta);
     this.drawMinimap(time);
   }
