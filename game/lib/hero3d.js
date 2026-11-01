@@ -27,6 +27,16 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// Optional Blender-built pieces (tools/blender/hero.py): body parts whose vertex colours hold only shading,
+// so each player's colours still apply, plus full-colour weapons. Load once before making heroes.
+const BP = {};
+export async function loadBlenderParts(url) {
+  const g = (await new GLTFLoader().loadAsync(url)).scene;
+  g.updateMatrixWorld(true);
+  g.traverse((o) => { if (o.isMesh) BP[o.name] = o.geometry.clone().applyMatrix4(o.matrixWorld); });
+}
 
 const SKINS = (globalThis.SPRITE && globalThis.SPRITE.SKINS) || ['#f6d3b3', '#e8b48a', '#c98c5a', '#9a6238', '#6b4428'];
 const HAIRS = (globalThis.SPRITE && globalThis.SPRITE.HAIRS) || ['#2a2630', '#6b3f1d', '#e0b85c', '#b4432e', '#dcd8d0', '#3f5ba0'];
@@ -75,11 +85,11 @@ function rimify(m) {
 }
 const MATS = new Map();
 function toon(color, o = {}) {
-  const key = [color, o.emissive, o.ei, o.side, o.flat, o.opacity].join('|');
+  const key = [color, o.emissive, o.ei, o.side, o.flat, o.opacity, o.vc].join('|');
   if (!o.map && MATS.has(key)) return MATS.get(key);
   const m = rimify(new THREE.MeshToonMaterial({
     color, gradientMap: GRAD, map: o.map || null, emissive: o.emissive || '#000000', emissiveIntensity: o.ei ?? 1,
-    side: o.side ?? THREE.FrontSide, flatShading: !!o.flat, transparent: o.opacity !== undefined, opacity: o.opacity ?? 1,
+    side: o.side ?? THREE.FrontSide, flatShading: !!o.flat, transparent: o.opacity !== undefined, opacity: o.opacity ?? 1, vertexColors: !!o.vc,
   }));
   if (!o.map) MATS.set(key, m);
   return m;
@@ -412,7 +422,11 @@ function bladeShape(len, w, curve = 0) {
   return g;
 }
 const WEAPONS = {
-  iron_sword: (w) => WEAPONS.sword(w, 0.5, '#c3ccd8', null),
+  iron_sword: (w) => {
+    if (!BP.iron_sword) return WEAPONS.sword(w, 0.5, '#c3ccd8', null);
+    part(BP.iron_sword, toon('#ffffff', { vc: true, emissive: '#ffffff', ei: 0.04 }), w);
+    return { type: 'blade', tip: [0, 0.63, 0], base: [0, 0.14, 0], trail: '#eaff8a' };
+  },
   ember_blade: (w) => WEAPONS.sword(w, 0.55, '#ff6a2e', '#ff5a10'),
   void_blade: (w) => WEAPONS.sword(w, 0.55, '#8a5ae8', '#7a2aff'),
   shadow_dagger: (w) => WEAPONS.sword(w, 0.28, '#8d93c4', null, '#3c3646'),
@@ -447,8 +461,9 @@ const WEAPONS = {
     return { type: 'wand', tip: [0, len + 0.02, 0], base: [0, len * 0.5, 0], trail: gem, cast };
   },
   inferno_staff(w) {
-    part(new THREE.CylinderGeometry(0.02, 0.028, 1.05, 8), toon('#3a1a14'), w, [0, 0.2, 0]);
-    for (let i = 0; i < 4; i++) {
+    if (BP.inferno_staff) part(BP.inferno_staff, toon('#ffffff', { vc: true }), w);
+    else part(new THREE.CylinderGeometry(0.02, 0.028, 1.05, 8), toon('#3a1a14'), w, [0, 0.2, 0]);
+    for (let i = 0; i < (BP.inferno_staff ? 0 : 4); i++) {
       const a = (i / 4) * Math.PI * 2;
       part(G.cone, toon('#e0b048'), w, [Math.cos(a) * 0.06, 0.78, Math.sin(a) * 0.06], [0.018, 0.12, 0.018], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5], false);
     }
@@ -561,7 +576,9 @@ export function makeHero3D(look = {}) {
   const body = group(root);
   const hips = group(body, [0, HIP_Y, 0]);
   J.body = body; J.hips = hips;
-  part(rbox(0.27, 0.13, 0.19, 0.055), f.robe ? M.shirt : M.pants, hips);
+  const VC = (m) => (BP.torso ? toon('#' + m.color.getHexString(), { vc: true }) : m); // shading-only Blender pieces
+  if (BP.pelvis) part(BP.pelvis, VC(f.robe ? M.shirt : M.pants), hips);
+  else part(rbox(0.27, 0.13, 0.19, 0.055), f.robe ? M.shirt : M.pants, hips);
 
   // legs (side -1 = right, on -x; +1 = left)
   for (const side of [-1, 1]) {
@@ -572,8 +589,11 @@ export function makeHero3D(look = {}) {
     part(capsule(0.052, 0.09), M.pants, knee, [0, -0.08, 0]);
     if (f.bootTop || eq.feet === 'iron_greaves') part(G.cyl, M.boot, knee, [0, -0.115, 0.004], [0.066, 0.11, 0.07]);
     const ankle = group(knee, [0, -0.18, 0]);
-    part(rbox(0.112, 0.1, 0.18, 0.045), M.boot, ankle, [0, -0.035, 0.028]);
-    part(rbox(0.118, 0.025, 0.19, 0.011), M.sole, ankle, [0, -0.077, 0.028]);
+    if (BP.boot) part(BP.boot, VC(M.boot), ankle, [0, 0.01, 0.0]);
+    else {
+      part(rbox(0.112, 0.1, 0.18, 0.045), M.boot, ankle, [0, -0.035, 0.028]);
+      part(rbox(0.118, 0.025, 0.19, 0.011), M.sole, ankle, [0, -0.077, 0.028]);
+    }
     if (eq.feet === 'winged_boots') {
       const wing = group(ankle, [side * 0.06, 0.0, -0.02]);
       part(strand([[0, 0, 0], [side * 0.05, 0.04, -0.04], [side * 0.06, 0.09, -0.1]], 0.03, 0.004, 8, 6), toon('#ffffff'), wing, [0, 0, 0], [1, 1, 0.4]);
@@ -585,7 +605,8 @@ export function makeHero3D(look = {}) {
   // torso
   const spine = group(hips, [0, 0.055, 0]);
   J.spine = spine; ctx.spine = spine;
-  J.torso = part(lathe([[0, -0.02], [0.135, -0.02], [0.148, 0.05], [0.162, 0.13], [0.164, 0.18], [0.152, 0.22], [0.11, 0.255], [0.06, 0.27], [0, 0.27]]), M.shirt, spine, [0, 0, 0], [1, 1, 0.8]);
+  J.torso = part(BP.torso && f.extra !== 'chain' ? BP.torso : lathe([[0, -0.02], [0.135, -0.02], [0.148, 0.05], [0.162, 0.13], [0.164, 0.18], [0.152, 0.22], [0.11, 0.255], [0.06, 0.27], [0, 0.27]]),
+    BP.torso && f.extra !== 'chain' ? VC(M.shirt) : M.shirt, spine, [0, 0, 0], [1, 1, 0.8]);
   if (f.belt) {
     part(new THREE.CylinderGeometry(0.152, 0.15, 0.05, 32), M.belt, spine, [0, 0.0, 0], [1, 1, 0.83]);
     part(rbox(0.05, 0.045, 0.02, 0.008), toon(f.buckle || '#e0b450'), spine, [0, 0, 0.128]);
@@ -640,8 +661,11 @@ export function makeHero3D(look = {}) {
     }
     if (f.bracer) part(G.cyl, toon(f.bracer), el, [0, -0.085, 0], [0.047, 0.06, 0.047]);
     const hand = group(el, [0, -0.135, 0]);
-    part(G.sph, M.gloves, hand, [0, -0.02, 0], [0.05, 0.056, 0.048]);
-    part(G.sphLo, M.gloves, hand, [-side * 0.03, -0.005, 0.03], 0.022);
+    if (BP.hand) part(BP.hand, VC(M.gloves), hand, [0, 0, 0], [-side, 1, 1]); // mirrored for the left hand
+    else {
+      part(G.sph, M.gloves, hand, [0, -0.02, 0], [0.05, 0.056, 0.048]);
+      part(G.sphLo, M.gloves, hand, [-side * 0.03, -0.005, 0.03], 0.022);
+    }
     J['sh' + k] = sh; J['el' + k] = el; J['hand' + k] = hand;
   }
 
