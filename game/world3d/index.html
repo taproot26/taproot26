@@ -2568,7 +2568,9 @@ function onState(d) {
 if (window.supabase) {
   const sb = window.supabase.createClient('https://azvdqigaqwbeakjieaps.supabase.co',
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dmRxaWdhcXdiZWFramllYXBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTE0NjEsImV4cCI6MjA5OTA2NzQ2MX0.QXBpcGKsot8A8w6rq76F6lvGjCVJN0NytDmfmE8C-Dw');
-  mp.channel = sb.channel('world3d-mp', { config: { broadcast: { self: false } } });
+  // local dev / test runs get their own channel, so they never show up for players on the live site
+  const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  mp.channel = sb.channel(LOCAL ? 'world3d-mp-dev' : 'world3d-mp', { config: { broadcast: { self: false } } });
   mp.channel
     .on('broadcast', { event: 'join' }, ({ payload }) => {
       const known = ghosts.has(payload.id);
@@ -2974,7 +2976,7 @@ function update(dt, now) {
 
 SPAWN_LIST.forEach((type) => spawnMonster(type));
 // debug hook for tests and screenshots: __world3d.tp(x, z) teleports, .P is the player state
-window.__world3d = { P, ghosts, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, size: [MAP_W, MAP_H] };
+window.__world3d = { P, ghosts, monsters, drops, field: () => field, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, size: [MAP_W, MAP_H] };
 updateHud();
 renderBag();
 (function frame() {

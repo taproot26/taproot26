@@ -41,9 +41,10 @@ export const SHOPS = {
 export const SELL = { slime_gel: 3, spore_cap: 4, bat_fang: 5, goblin_ear: 8, royal_jelly: 40, health_potion: 6, big_potion: 18, apple: 1 };
 
 export const RECIPES = [
+  // the first gear loop: beat a slime and a bat, grab their drops and 10 gold, forge a fire staff
+  { id: 'inferno_staff', needs: { slime_gel: 1, bat_fang: 1 }, gold: 10 },
   { id: 'health_potion', needs: { slime_gel: 2, spore_cap: 1 }, gold: 0, qty: 2 },
   { id: 'big_potion', needs: { royal_jelly: 1, slime_gel: 3 }, gold: 10 },
   { id: 'apprentice_wand', needs: { slime_gel: 3, bat_fang: 1 }, gold: 0 },
   { id: 'fire_wand', needs: { spore_cap: 3, bat_fang: 2, goblin_ear: 1 }, gold: 20 },
-  { id: 'inferno_staff', needs: { royal_jelly: 1, goblin_ear: 4, spore_cap: 3 }, gold: 60 },
 ];
