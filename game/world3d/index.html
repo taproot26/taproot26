@@ -1449,8 +1449,17 @@ const signs = []; // named buildings get a floating sign
 const circles = []; // round colliders [x, z, r] on top of the tile grid
 const boats = [];   // { g, x, y, z, ph, sail? } bob on the water; sailing ones cruise back and forth
 // Style test: ?blender=1 swaps the town cottages for the Blender-built model (tools/blender/cottage.py).
-const BLENDER_COTTAGE = new URLSearchParams(location.search).has('blender')
-  ? (await new GLTFLoader().loadAsync('/game/assets3d/cottage.glb')).scene : null;
+const BLENDER = new URLSearchParams(location.search).has('blender');
+const BLENDER_COTTAGE = BLENDER ? (await new GLTFLoader().loadAsync('/game/assets3d/cottage.glb')).scene : null;
+// Trees are instanced: one geometry per kind (node transforms baked in), drawn hundreds of times.
+const BLENDER_TREES = {};
+if (BLENDER) await Promise.all(['tree_round', 'tree_oak', 'tree_pine'].map(async (k) => {
+  const g = (await new GLTFLoader().loadAsync(`/game/assets3d/${k}.glb`)).scene;
+  g.updateMatrixWorld(true);
+  const geos = [];
+  g.traverse((o) => { if (o.isMesh) geos.push(o.geometry.clone().applyMatrix4(o.matrixWorld)); });
+  BLENDER_TREES[k] = { geo: geos.length > 1 ? mergeGeometries(geos) : geos[0], spots: [] };
+}));
 function addModel(src, x, z, ry, sx, sz) {
   const m = src.clone(true);
   m.traverse((o) => {
@@ -1465,6 +1474,10 @@ function addModel(src, x, z, ry, sx, sz) {
 }
 placed.forEach(({ key, tx, ty, w, h, name, ry }) => {
   const r = hash(tx, ty, 71);
+  if (BLENDER_TREES[key]) {
+    BLENDER_TREES[key].spots.push([tx + w / 2, ty + h / 2, r * Math.PI * 2, 0.85 + hash(tx, ty, 72) * 0.35]);
+    return;
+  }
   if (BLENDER_COTTAGE && TOWN && (key === 'house_a' || key === 'house_b')) {
     if (name) signs.push({ x: tx + w / 2, z: ty + h / 2, y: 4.9, name });
     addModel(BLENDER_COTTAGE, tx + w / 2, ty + h / 2, ry || 0, (w - 0.7) / 4.3, (h - 0.7) / 3.3);
@@ -1487,6 +1500,23 @@ placed.forEach(({ key, tx, ty, w, h, name, ry }) => {
   at(tx + w / 2, ty + h / 2, tree || key === 'boulder' || key === 'crystal' ? r * Math.PI * 2 : ry || 0, tree ? 0.85 + hash(tx, ty, 72) * 0.35 : 1);
   ((TOWN && TOWN_BUILD[key]) || BUILD[key] || BUILD.crate)(r, w, h, name || '');
 });
+
+// One instanced mesh per tree kind per 24-tile chunk, so chunks off screen (or outside the
+// shadow camera) are culled instead of drawing every tree on the map every frame.
+{
+  const mat = toon({ vertexColors: true }), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+  for (const { geo, spots } of Object.values(BLENDER_TREES)) {
+    const chunks = new Map();
+    for (const sp of spots) { const k = `${Math.floor(sp[0] / 24)},${Math.floor(sp[1] / 24)}`; (chunks.get(k) || chunks.set(k, []).get(k)).push(sp); }
+    for (const list of chunks.values()) {
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach(([x, z, ry, s], i) => im.setMatrixAt(i, m.compose(p.set(x, 0, z), q.setFromEuler(e.set(0, ry, 0)), sc.set(s, s, s))));
+      im.computeBoundingSphere();
+      im.castShadow = im.receiveShadow = true;
+      scene.add(im);
+    }
+  }
+}
 
 // piers and the quay: plank boards (alternating tones) on posts over the water
 PLANKS.forEach(([x1, y1, x2, y2, kind]) => {
@@ -2997,7 +3027,11 @@ function update(dt, now) {
 
 SPAWN_LIST.forEach((type) => spawnMonster(type));
 // debug hook for tests and screenshots: __world3d.tp(x, z) teleports, .P is the player state
-window.__world3d = { P, ghosts, monsters, drops, field: () => field, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, size: [MAP_W, MAP_H] };
+window.__world3d = { P, ghosts, monsters, drops, field: () => field, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, size: [MAP_W, MAP_H], info: () => { // one full frame's draw calls and triangles (all passes, shadows included)
+  renderer.info.autoReset = false; renderer.info.reset(); composer.render();
+  const r = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+  renderer.info.autoReset = true; return r;
+} };
 updateHud();
 renderBag();
 (function frame() {
