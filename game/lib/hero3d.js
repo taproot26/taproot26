@@ -7,7 +7,7 @@
      import { makeHero3D } from '/game/lib/hero3d.js';
      const hero = makeHero3D(look);   scene.add(hero.root);
      each frame: hero.root.position / rotation.y = where it is, then
-                 hero.update(dt, { atk: -1 | 0..1, lookAt: Vector3 | null, air: bool, vy: vertical speed });
+                 hero.update(dt, { atk: -1 | 0..1, atkL: (left hand), lookAt: Vector3 | null, air: bool, vy: vertical speed });
      hero.hurt();  hero.emote('happy', 0.8);
 
    What makes it tick:
@@ -679,7 +679,15 @@ export function makeHero3D(look = {}) {
     part(G.cyl, toon('#7a5230'), quiver, [0, 0, 0], [0.045, 0.3, 0.045]);
     for (let i = 0; i < 3; i++) part(G.cone, toon('#eae4d6'), quiver, [(i - 1) * 0.022, 0.19, 0], [0.018, 0.06, 0.012]);
   }
-  if (OFFHAND[eq.lhand]) OFFHAND[eq.lhand](J.handL, ctx);
+  // dual wield: a weapon in the left hand is built like the right one (off-hand items otherwise)
+  const wpnL = group(J.handL, [0, -0.02, 0.0]);
+  J.wpnL = wpnL;
+  const WL = WEAPONS[eq.lhand] ? WEAPONS[eq.lhand](wpnL) : null;
+  const wtypeL = WL ? WL.type : null;
+  if (!WL && OFFHAND[eq.lhand]) OFFHAND[eq.lhand](J.handL, ctx);
+  const tipL = new THREE.Object3D();
+  (WL ? wpnL : J.handL).add(tipL);
+  if (WL) tipL.position.set(...WL.tip);
   const tip = new THREE.Object3D(), base = new THREE.Object3D();
   (W ? wpn : J.handR).add(tip, base);
   if (W) { tip.position.set(...W.tip); base.position.set(...W.base); } else { tip.position.set(0, -0.05, 0.02); base.position.set(0, 0.04, 0); }
@@ -807,15 +815,16 @@ export function makeHero3D(look = {}) {
     let spY = -s1 * 0.26 * m + st.headYaw * 0.2 * (1 - m), spX = 0.04 * m + 0.2 * r + clamp(accF * 0.012, -0.15, 0.2), spZ = 0;
     const swing = (0.5 + 0.45 * r) * m, idle = (1 - m) * Math.sin(t * 1.3) * 0.03;
     let shLx = s1 * swing + idle, shRx = -s1 * swing - idle, shLz = 0.1 + 0.2 * r + Math.abs(idle), shRz = -(0.1 + 0.2 * r + Math.abs(idle));
-    let elL = -(0.2 + 0.85 * r) * Math.max(m, 0.35), elR = elL, wpx = wtype === 'blade' ? 1.85 : wtype === 'wand' ? 1.5 : 0, shRy = 0;
-    if (wtype === 'pole') { shRx = shRx * 0.4 - 0.15; elR = -0.55; wpx = 0.55; }
+    const restX = (wt) => (wt === 'blade' ? 1.85 : wt === 'wand' ? 1.5 : wt === 'pole' ? 0.75 : 0);
+    let elL = -(0.2 + 0.85 * r) * Math.max(m, 0.35), elR = elL, wpx = restX(wtype), wpxL = restX(wtypeL), shRy = 0;
+    if (wtype === 'pole') { shRx = shRx * 0.4 - 0.15; elR = -0.55; shRz -= 0.12; }
+    if (wtypeL === 'pole') { shLx = shLx * 0.4 - 0.15; elL = -0.55; shLz += 0.12; }
     if (ctx.light) elL = -1.1;                         // lantern held up in front
     if (ctx.orb || ctx.sparks) elL = -0.9;
 
     // attack, keyframed per weapon type, then blended back into locomotion
-    const p = s.atk ?? -1;
-    if (p >= 0) {
-      const END = 0.48, w = p < END ? 1 : 1 - easeInOut((p - END) / (1 - END)), q = Math.min(p, END);
+    const END = 0.48;
+    const pose = (wtype, q) => {
       let a;
       if (wtype === 'blade') {
         if (q < 0.2) { const e = easeOut(q / 0.2); a = { spY: -1.1 * e, shRx: -1.45 * e, shRz: -0.7 * e, elR: -0.25, wpx: lerp(1.85, 2.6, e), shLx: -0.3 * e, shLz: 0.1 + 0.3 * e }; }
@@ -824,17 +833,29 @@ export function makeHero3D(look = {}) {
         if (q < 0.2) { const e = easeOut(q / 0.2); a = { spY: -0.3 * e, shRx: -0.6 - 1.5 * e, shRz: -0.25, elR: -0.9 * e, wpx: lerp(1.5, 2.3, e), shLx: -0.25 * e, shLz: 0.25 }; }
         else { const e = easeOut((q - 0.2) / 0.28); a = { spY: -0.3 + 0.35 * e, shRx: -2.1 + 0.6 * e, shRz: -0.25, elR: -0.9 + 0.85 * e, wpx: 2.3 + 0.75 * e, shLx: -0.25, shLz: 0.25 }; }
       } else if (wtype === 'pole') {
-        if (q < 0.22) { const e = easeOut(q / 0.22); a = { spY: -0.45 * e, shRx: -0.5 - 0.5 * e, shRz: -0.2, elR: -0.55 - 0.8 * e, wpx: lerp(0.55, 1.45, e), shLx: -0.6 * e, shLz: 0.2 }; }
-        else { const e = easeOut((q - 0.22) / 0.26); a = { spY: -0.45 + 0.75 * e, shRx: -1.0 - 0.45 * e, shRz: -0.2, elR: -1.35 + 1.2 * e, wpx: 1.45, shLx: -0.6, shLz: 0.2 }; hipZ = 0.06 * e * w; }
+        if (q < 0.22) { const e = easeOut(q / 0.22); a = { spY: -0.45 * e, shRx: -0.5 - 0.5 * e, shRz: -0.2, elR: -0.55 - 0.8 * e, wpx: lerp(0.75, 1.45, e), shLx: -0.6 * e, shLz: 0.2 }; }
+        else { const e = easeOut((q - 0.22) / 0.26); a = { spY: -0.45 + 0.75 * e, shRx: -1.0 - 0.45 * e, shRz: -0.2, elR: -1.35 + 1.2 * e, wpx: 1.45, shLx: -0.6, shLz: 0.2, hipZ: 0.06 * e }; }
       } else {
         if (q < 0.2) { const e = easeOut(q / 0.2); a = { spY: -0.6 * e, shRx: -1.2 * e, shRz: -0.3 * e, elR: -1.7 * e, wpx: 0, shLx: -0.9 * e, shLz: 0.3 }; }
         else { const e = easeOut((q - 0.2) / 0.28); a = { spY: -0.6 + 1.1 * e, shRx: -1.2 - 0.35 * e, shRz: -0.3 + 0.3 * e, elR: -1.7 + 1.6 * e, wpx: 0, shLx: -0.9, shLz: 0.3 }; }
       }
+      return a;
+    };
+    const p = s.atk ?? -1, pL = s.atkL ?? -1;
+    if (p >= 0) {
+      const w = p < END ? 1 : 1 - easeInOut((p - END) / (1 - END)), a = pose(wtype, Math.min(p, END));
+      hipZ = (a.hipZ || 0) * w;
       spY = lerp(spY, a.spY, w); shRx = lerp(shRx, a.shRx, w); shRz = lerp(shRz, a.shRz, w); elR = lerp(elR, a.elR, w);
       wpx = lerp(wpx, a.wpx, w); shLx = lerp(shLx, a.shLx, w); shLz = lerp(shLz, a.shLz, w);
       spX = lerp(spX, 0.12, w);
       hipZ += Math.sin(Math.min(1, p / END) * Math.PI) * 0.04 * w;
       sq = Math.sin(Math.min(1, p / 0.3) * Math.PI) * 0.06 * w;
+    }
+    if (pL >= 0) { // the left hand plays the same keyframes mirrored, leaving the right arm alone
+      const w = pL < END ? 1 : 1 - easeInOut((pL - END) / (1 - END)), a = pose(wtypeL || 'fist', Math.min(pL, END));
+      spY = lerp(spY, -a.spY, w * 0.8); shLx = lerp(shLx, a.shRx, w); shLz = lerp(shLz, -a.shRz, w); elL = lerp(elL, a.elR, w);
+      wpxL = lerp(wpxL, a.wpx, w); spX = lerp(spX, 0.12, w);
+      sq = Math.max(sq, Math.sin(Math.min(1, pL / 0.3) * Math.PI) * 0.06 * w);
     }
     // hurt: flinch back, arms out
     if (st.hurt > 0) {
@@ -864,7 +885,8 @@ export function makeHero3D(look = {}) {
     J.spine.rotation.set(spX, spY, spZ);
     J.shL.rotation.set(shLx, 0, shLz); J.shR.rotation.set(shRx, shRy, shRz);
     J.elL.rotation.x = elL; J.elR.rotation.x = elR;
-    J.wpn.rotation.x = wpx;
+    J.wpn.rotation.x = wpx; J.wpnL.rotation.x = wpxL;
+    J.wpn.rotation.z = wtype === 'pole' ? 0.3 : 0; J.wpnL.rotation.z = wtypeL === 'pole' ? -0.3 : 0; // poles lean out, away from the head
     J.body.rotation.z = -clamp(st.turn * speed * 0.02, -0.28, 0.28);
     J.body.scale.set(1 + sq * 0.6, 1 - sq, 1 + sq * 0.6);
     J.torso.scale.set(1 + Math.sin(t * 2.2) * 0.008, 1 + Math.sin(t * 2.2) * 0.014, 0.8);
@@ -894,7 +916,7 @@ export function makeHero3D(look = {}) {
     st.blinkT -= dt; st.blink -= dt;
     if (st.blinkT <= 0) { st.blink = 0.12; st.blinkT = 1.8 + Math.random() * 3.5; }
     if (st.emoteT > 0) st.emoteT -= dt;
-    setExpr(st.hurt > 0 ? 'hurt' : p >= 0 && p < 0.6 ? 'attack' : st.emoteT > 0 ? st.emote : st.blink > 0 ? 'blink' : 'normal');
+    setExpr(st.hurt > 0 ? 'hurt' : (p >= 0 && p < 0.6) || (pL >= 0 && pL < 0.6) ? 'attack' : st.emoteT > 0 ? st.emote : st.blink > 0 ? 'blink' : 'normal');
 
     // trail
     if (scene) {
@@ -966,7 +988,9 @@ export function makeHero3D(look = {}) {
   return {
     root, update,
     caster: W && W.cast ? W.cast : null,   // { color, cd, range, aoe, size } for wands and staffs
+    casterL: WL && WL.cast ? WL.cast : null, // the same for a caster in the left hand
     tipWorld: (v) => tip.getWorldPosition(v),
+    tipWorldL: (v) => tipL.getWorldPosition(v),
     hurt() { st.hurt = 0.4; },
     dispose() { // remove the bits that live in the scene rather than under root
       trail.removeFromParent();

@@ -194,7 +194,7 @@ else if (!localStorage.getItem('taproot_character')) window.location.replace('/g
   <button id="jumpBtn" type="button" tabindex="-1" aria-label="Jump">JUMP</button>
   <button id="attackBtn" type="button" tabindex="-1" aria-label="Attack">&#9876;&#65039;</button>
 </div>
-<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>J</b> attack &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag &middot; <b>U</b> auto-run &middot; <b>T</b> chat</div>
+<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>'</b> / <b>J</b> right hand &middot; <b>;</b> left hand &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag &middot; <b>U</b> sprint toggle &middot; <b>T</b> chat</div>
 <div id="chat">
   <div id="chatLog"></div>
   <div id="chatRow" hidden><input id="chatIn" type="text" placeholder="Say something..." maxlength="200" autocomplete="off"><button id="chatSend" type="button">Send</button></div>
@@ -2099,7 +2099,7 @@ let camYaw = 0, camPitch = CAM_MODES[camMode].pitch, camDist = CAM_MODES[camMode
 let fov = 58, shake = 0, lastDrag = -1e9;
 if (INDOOR) { camDist = camDistT = 7.5; camPitch = camPitchT = 0.95; }
 let hero = makeHero(charData || DEFAULT_CHAR);
-const P = { x: spawnAt.x + 0.5, z: spawnAt.y + 0.75, y: 0, vy: 0, heading: Math.PI, phase: 0, atk: -1, grounded: 0 };
+const P = { x: spawnAt.x + 0.5, z: spawnAt.y + 0.75, y: 0, vy: 0, heading: Math.PI, phase: 0, atk: -1, atkL: -1, grounded: 0 };
 if (A.arrive[from]) { // arriving through a gate: face into the map, not back at the gate
   P.heading = Math.atan2(MAP_W / 2 - P.x, MAP_H / 2 - P.z);
   camYaw = P.heading + Math.PI;
@@ -2123,7 +2123,7 @@ function computeStats3d() {
   return s;
 }
 const stats = computeStats3d();
-let hp = stats.hp, inv = 0, attackCd = 0, pkb = { x: 0, z: 0, t: 0 };
+let hp = stats.hp, inv = 0, attackCd = 0, attackCdL = 0, pkb = { x: 0, z: 0, t: 0 };
 let field = null;
 try { field = JSON.parse(localStorage.getItem(FIELD_KEY)); } catch (e) {}
 field = Object.assign({ xp: 0, kills: 0, gold: 0 }, field);
@@ -2189,13 +2189,13 @@ function toast(msg) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { t.hidden = true; }, 1200);
 }
-// Auto-run: U toggles walking forward hands-free (steer with the camera, A/D still strafe).
-// Shift, S / down, or U again turns it off and you're back to walking normally.
-let autoRun = false;
-function setAutoRun(on) {
-  if (autoRun === on) return;
-  autoRun = on;
-  toast(on ? 'Auto-run on (U / Shift to stop)' : 'Auto-run off');
+// Sprint toggle: U turns the nitro sprint on so you don't have to hold Shift. Pressing Shift
+// (or U again) turns it off and you walk; that Shift press doesn't count as holding Shift.
+let sprintOn = false, shiftCancel = false;
+function setSprint(on) {
+  if (sprintOn === on) return;
+  sprintOn = on;
+  toast(on ? 'Sprint on (Shift or U to walk)' : 'Walking');
 }
 
 /* ---------- shops, crafting, gear and potions ---------- */
@@ -2225,6 +2225,12 @@ const openShop = (name) => { modal = { kind: 'shop', name, tab: 'buy' }; toggleB
 const openCraft = () => { modal = { kind: 'craft' }; toggleBag(false); renderModal(); };
 function closeModal() { modal = null; $('shopPanel').hidden = true; }
 function gearButton(id) {
+  const eq = (charData || DEFAULT_CHAR).equipment || {};
+  if (ITEM(id).slot === 'rhand') { // weapons go in either hand (dual wield)
+    const b = (h) => (eq[h] === id ? `<button disabled>${h === 'rhand' ? 'In R' : 'In L'}</button>`
+      : `<button class="alt" data-act="equip" data-id="${id}" data-slot="${h}">Equip ${h === 'rhand' ? 'R' : 'L'}</button>`);
+    return b('rhand') + b('lhand');
+  }
   if (equippedIds().includes(id)) return '<button disabled>Equipped</button>';
   return `<button class="alt" data-act="equip" data-id="${id}">Equip</button>`;
 }
@@ -2286,18 +2292,22 @@ function shopAct(act, id, extra) {
     floatText(P.x, 2.2, P.z, `Crafted ${nameOf(id)}!`, '#7ae0ff');
     hero.emote('happy', 1.2);
     burst(P.x, 1.2, P.z, '#7ae0ff', 14);
-  } else if (act === 'equip') equip(id);
+  } else if (act === 'equip') equip(id, extra);
   saveField();
   updateHud();
   renderBag();
   renderModal();
 }
 // Put an owned item on, save it with the character and rebuild the 3D hero.
-function equip(id) {
+function equip(id, slot) {
   const it = ITEM(id);
   if (!it) return;
+  slot = it.slot === 'rhand' && slot === 'lhand' ? 'lhand' : it.slot; // weapons may go in the left hand
   charData = charData || JSON.parse(JSON.stringify(DEFAULT_CHAR));
-  charData.equipment = Object.assign({}, charData.equipment, { [it.slot]: id });
+  const eq = Object.assign({}, charData.equipment);
+  for (const h of ['rhand', 'lhand']) if (h !== slot && eq[h] === id) delete eq[h]; // one item, one hand
+  eq[slot] = id;
+  charData.equipment = eq;
   try { localStorage.setItem(HAD_CHAR ? 'taproot_character' : 'taproot3d_look', JSON.stringify(charData)); } catch (e) {}
   const pos = hero.root.position.clone(), ry = hero.root.rotation.y;
   hero.dispose();
@@ -2332,12 +2342,13 @@ function jump() {
   P.grounded = 1;
 }
 
-function swing() {
-  if (fainted || modal || attackCd > 0) return;
-  attackCd = hero.caster ? hero.caster.cd : 0.36;
-  P.atk = 0;
-  mp.atk = Math.round(performance.now()); // stamp the swing so other players see it once
-  if (hero.caster) { setTimeout(castBall, 120); return; } // wands and staffs shoot instead
+// hand 'R' (J, K or ') or 'L' (;): each hand has its own weapon, swing and cooldown (dual wield)
+function swing(hand = 'R') {
+  const L = hand === 'L', caster = L ? hero.casterL : hero.caster;
+  if (fainted || modal || (L ? attackCdL : attackCd) > 0) return;
+  if (L) { attackCdL = caster ? caster.cd : 0.36; P.atkL = 0; mp.atkL = Math.round(performance.now()); }
+  else { attackCd = caster ? caster.cd : 0.36; P.atk = 0; mp.atk = Math.round(performance.now()); } // stamp the swing so other players see it once
+  if (caster) { setTimeout(() => castBall(hand), 120); return; } // wands and staffs shoot instead
   // hits land when the swing connects (the hero draws the blade trail itself)
   setTimeout(() => {
     const hx = P.x + Math.sin(P.heading) * 0.75, hz = P.z + Math.cos(P.heading) * 0.75;
@@ -2358,11 +2369,13 @@ function hitMonster(m, power = stats.atk) {
 const fireballs = [], blasts = [];
 const FB_LIGHTS = [0, 1, 2, 3].map(() => { const l = new THREE.PointLight('#ff8a3a', 0, 7, 1.6); scene.add(l); return l; }); // pooled: adding lights live recompiles shaders
 const FB_GEO = new THREE.SphereGeometry(1, 16, 12);
-function castBall() {
-  const c = hero.caster;
+function castBall(hand = 'R') {
+  const c = hand === 'L' ? hero.casterL : hero.caster;
   if (!c || fainted) return;
-  hero.tipWorld(V);
-  const dx = Math.sin(P.heading), dz = Math.cos(P.heading), s = c.size;
+  (hand === 'L' ? hero.tipWorldL : hero.tipWorld)(V);
+  // aim from the tip at a point straight ahead of the player, so shots from either hand converge on the target line
+  const ax = P.x + Math.sin(P.heading) * 8 - V.x, az = P.z + Math.cos(P.heading) * 8 - V.z, al = Math.hypot(ax, az) || 1;
+  const dx = ax / al, dz = az / al, s = c.size;
   const g = new THREE.Group();
   const core = new THREE.Mesh(FB_GEO, new THREE.MeshBasicMaterial({ color: '#fff4c0' }));
   core.scale.setScalar(0.11 * s);
@@ -2576,7 +2589,7 @@ function drawMinimap(now) {
    ping every 3 s); others ease toward it, so their heroes walk and turn smoothly. Players in the
    mine or the workshop only see each other there (the 'room' field). */
 const MP_ROOM = UNDER ? 'cave' : INDOOR ? AREA : 'world';
-const mp = { id: Math.random().toString(36).slice(2, 10), live: false, last: 0, sent: null, atk: 0 };
+const mp = { id: Math.random().toString(36).slice(2, 10), live: false, last: 0, sent: null, atk: 0, atkL: 0 };
 mp.name = (charData && charData.name && charData.name.trim()) || 'Wanderer';
 const ghosts = new Map();
 let chatOpen = false;
@@ -2602,7 +2615,7 @@ function chatLine(name, msg, sys) {
   setTimeout(() => el.remove(), 30000);
 }
 function myState() {
-  return { id: mp.id, name: mp.name, char: charData, room: MP_ROOM, x: +P.x.toFixed(2), z: +P.z.toFixed(2), y: +P.y.toFixed(2), h: +P.heading.toFixed(2), atk: mp.atk };
+  return { id: mp.id, name: mp.name, char: charData, room: MP_ROOM, x: +P.x.toFixed(2), z: +P.z.toFixed(2), y: +P.y.toFixed(2), h: +P.heading.toFixed(2), atk: mp.atk, atkL: mp.atkL };
 }
 function addGhost(d) {
   if (d.id === mp.id || d.room !== MP_ROOM) return null;
@@ -2612,7 +2625,7 @@ function addGhost(d) {
     tag.className = 'tag player';
     tag.textContent = d.name || 'Wanderer';
     labelsEl.appendChild(tag);
-    g = { id: d.id, name: d.name || 'Wanderer', hero: makeHero(d.char || DEFAULT_CHAR), tag, bubble: { el: null, until: 0 }, x: d.x, z: d.z, y: 0, h: d.h || 0, tx: d.x, tz: d.z, ty: 0, th: d.h || 0, atk: -1, atkSeen: d.atk || 0 };
+    g = { id: d.id, name: d.name || 'Wanderer', hero: makeHero(d.char || DEFAULT_CHAR), tag, bubble: { el: null, until: 0 }, x: d.x, z: d.z, y: 0, h: d.h || 0, tx: d.x, tz: d.z, ty: 0, th: d.h || 0, atk: -1, atkSeen: d.atk || 0, atkL: -1, atkLSeen: d.atkL || 0 };
     g.hero.root.position.set(d.x, 0, d.z); // start in place: the hero's springs read speed from how far the root moves
     ghosts.set(d.id, g);
     chatLine('', `${g.name} is here`, true);
@@ -2632,6 +2645,7 @@ function onState(d) {
   if (!g) { if (ghosts.has(d.id)) removeGhost(d.id); return; } // they walked into another room
   Object.assign(g, { tx: d.x, tz: d.z, ty: d.y || 0, th: d.h || 0, seen: performance.now() });
   if (d.atk && d.atk !== g.atkSeen) { g.atkSeen = d.atk; g.atk = 0; }
+  if (d.atkL && d.atkL !== g.atkLSeen) { g.atkLSeen = d.atkL; g.atkL = 0; }
 }
 if (window.supabase) {
   const sb = window.supabase.createClient('https://azvdqigaqwbeakjieaps.supabase.co',
@@ -2692,7 +2706,7 @@ canvas.addEventListener('pointerdown', () => { if (chatOpen) closeChat(); });
 function updateMultiplayer(dt, now) {
   if (mp.live) {
     const st = myState(), prev = mp.sent;
-    const moved = !prev || Math.abs(st.x - prev.x) > 0.04 || Math.abs(st.z - prev.z) > 0.04 || Math.abs(st.y - prev.y) > 0.05 || Math.abs(wrapAngle(st.h - prev.h)) > 0.08 || st.atk !== prev.atk;
+    const moved = !prev || Math.abs(st.x - prev.x) > 0.04 || Math.abs(st.z - prev.z) > 0.04 || Math.abs(st.y - prev.y) > 0.05 || Math.abs(wrapAngle(st.h - prev.h)) > 0.08 || st.atk !== prev.atk || st.atkL !== prev.atkL;
     if (moved && now - mp.last > 120) { mp.channel.send({ type: 'broadcast', event: 'move', payload: st }); mp.sent = st; mp.last = now; }
   }
   for (const g of ghosts.values()) {
@@ -2700,9 +2714,10 @@ function updateMultiplayer(dt, now) {
     g.x = damp(g.x, g.tx, 10, dt); g.z = damp(g.z, g.tz, 10, dt); g.y = damp(g.y, g.ty, 14, dt);
     g.h += wrapAngle(g.th - g.h) * Math.min(1, dt * 12);
     if (g.atk >= 0) { g.atk += dt / 0.38; if (g.atk >= 1) g.atk = -1; }
+    if (g.atkL >= 0) { g.atkL += dt / 0.38; if (g.atkL >= 1) g.atkL = -1; }
     g.hero.root.position.set(g.x, g.y, g.z);
     g.hero.root.rotation.y = g.h;
-    g.hero.update(dt, { atk: g.atk, air: g.y > 0.02 });
+    g.hero.update(dt, { atk: g.atk, atkL: g.atkL, air: g.y > 0.02 });
     const near = Math.hypot(g.x - P.x, g.z - P.z) < 30, pos = near ? toScreen(g.x, HERO_H + 0.35 + g.y, g.z) : null;
     g.tag.hidden = !pos;
     if (pos) g.tag.style.transform = `translate(${pos[0]}px, ${pos[1]}px) translate(-50%, -100%)`;
@@ -2729,17 +2744,18 @@ addEventListener('keydown', (e) => {
   if ((e.code === 'KeyT' || e.code === 'Enter') && !modal) { e.preventDefault(); openChat(); return; }
   keys[e.code] = true;
   if (modal) { if (e.code === 'Escape' || e.code === 'KeyF') closeModal(); return; } // a shop / crafting panel is open
-  if (e.code === 'KeyU') setAutoRun(!autoRun);
-  else if (autoRun && ['ShiftLeft', 'ShiftRight', 'KeyS', 'ArrowDown'].includes(e.code)) setAutoRun(false);
+  if (e.code === 'KeyU') setSprint(!sprintOn);
+  else if (sprintOn && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) { setSprint(false); shiftCancel = true; }
   if (e.code === 'Space') jump();
-  if (e.code === 'KeyJ' || e.code === 'KeyK') swing();
+  if (e.code === 'KeyJ' || e.code === 'KeyK' || e.code === 'Quote') swing('R');
+  if (e.code === 'Semicolon') swing('L');
   if (e.code === 'KeyH') drinkBest();
   if (e.code === 'KeyB') toggleBag();
   if (e.code === 'KeyC') cycleCam();
   if (e.code === 'KeyF' && action) action.run();
   if (e.code === 'Escape') toggleBag(false);
 });
-addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('keyup', (e) => { keys[e.code] = false; if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') shiftCancel = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 let drag = null, joy = null;
 canvas.addEventListener('pointerdown', (e) => {
@@ -2771,7 +2787,7 @@ $('jumpBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); jump()
 $('sailBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); if (action) action.run(); });
 $('shopClose').addEventListener('click', closeModal);
 $('shopTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b && modal) { modal.tab = b.dataset.tab; renderModal(); } });
-$('shopList').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b) shopAct(b.dataset.act, b.dataset.id, b.dataset.price || b.dataset.n); });
+$('shopList').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b) shopAct(b.dataset.act, b.dataset.id, b.dataset.price || b.dataset.n || b.dataset.slot); });
 $('bagGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-use]'); if (b) drink(b.dataset.use); });
 $('camBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); cycleCam(); });
 $('bagBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); toggleBag(); });
@@ -2796,10 +2812,9 @@ function update(dt, now) {
   let fy = fainted || modal ? 0 : k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown');
   let fx = fainted || modal ? 0 : k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
   if (joy && !fainted) { fx += joy.fx; fy += joy.fy; }
-  if (autoRun && !fainted && !modal) fy = Math.max(fy, 1);
   camYaw += (k('KeyQ') - k('KeyE')) * 2.2 * dt;
   const moving = Math.hypot(fx, fy) > 0.15;
-  const boosting = moving && !autoRun && (keys.ShiftLeft || keys.ShiftRight) && !nitroLock && nitro > 0;
+  const boosting = moving && (sprintOn || ((keys.ShiftLeft || keys.ShiftRight) && !shiftCancel)) && !nitroLock && nitro > 0;
   if (boosting) { nitro -= dt * 0.12; if (nitro <= 0) { nitro = 0; nitroLock = true; } }
   else { nitro = Math.min(1, nitro + dt * 0.3); if (nitroLock && nitro > 0.25) nitroLock = false; }
   if (moving) {
@@ -2826,14 +2841,16 @@ function update(dt, now) {
 
   // 3D hero: it reads its own speed from how the root moves; looks at the nearest monster or townsfolk
   if (P.atk >= 0) { P.atk += dt / 0.38; if (P.atk >= 1) P.atk = -1; }
+  if (P.atkL >= 0) { P.atkL += dt / 0.38; if (P.atkL >= 1) P.atkL = -1; }
   let look = null, ld = 6;
   for (const mo of monsters) { const d = Math.hypot(mo.x - P.x, mo.z - P.z); if (!mo.dead && d < ld) { ld = d; look = mo; } }
   for (const n of npcs) { const d = Math.hypot(n.x - P.x, n.z - P.z); if (d < Math.min(ld, 4)) { ld = d; look = n; } }
   hero.root.position.set(P.x, P.y, P.z);
   hero.root.rotation.y = P.heading;
-  hero.update(dt, { atk: P.atk, lookAt: look, air: P.y > 0.001, vy: P.vy });
+  hero.update(dt, { atk: P.atk, atkL: P.atkL, lookAt: look, air: P.y > 0.001, vy: P.vy });
   hero.root.visible = !(inv > 0 && Math.floor(inv / 0.08) % 2);
   attackCd -= dt;
+  attackCdL -= dt;
   inv -= dt;
   updateMultiplayer(dt, now);
 
@@ -3026,7 +3043,8 @@ function update(dt, now) {
   // HUD bits that change every frame
   $('nitroFill').style.width = `${nitro * 100}%`;
   $('nitroFill').style.opacity = nitroLock ? 0.4 : 1;
-  $('nitroText').textContent = nitro >= 1 ? 'Ready' : `${Math.round(nitro * 100)}%`;
+  const nt = sprintOn ? `ON ${Math.round(nitro * 100)}%` : nitro >= 1 ? 'Ready' : `${Math.round(nitro * 100)}%`;
+  if ($('nitroText').textContent !== nt) $('nitroText').textContent = nt;
   drawMinimap(now);
 
   // stitched maps: the area name follows you as you walk from one district into the next
@@ -3047,7 +3065,7 @@ function update(dt, now) {
 
 SPAWN_LIST.forEach((type) => spawnMonster(type));
 // debug hook for tests and screenshots: __world3d.tp(x, z) teleports, .P is the player state
-window.__world3d = { P, ghosts, monsters, drops, field: () => field, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, cam: (dist, pitch) => { camDistT = camDist = dist; camPitchT = camPitch = pitch; }, size: [MAP_W, MAP_H], info: () => { // one full frame's draw calls and triangles (all passes, shadows included)
+window.__world3d = { P, ghosts, monsters, drops, field: () => field, hero: () => hero, fireballs, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, cam: (dist, pitch) => { camDistT = camDist = dist; camPitchT = camPitch = pitch; }, size: [MAP_W, MAP_H], info: () => { // one full frame's draw calls and triangles (all passes, shadows included)
   renderer.info.autoReset = false; renderer.info.reset(); composer.render();
   const r = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
   renderer.info.autoReset = true; return r;
