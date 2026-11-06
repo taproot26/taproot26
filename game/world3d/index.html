@@ -133,6 +133,23 @@
   .bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-bottom: 0; border-top-color: #fff; }
   #chatBtn { padding: 6px 12px; border-radius: 999px; font-size: 15px; background: linear-gradient(#8ad8ff, #3a8ae0); box-shadow: 0 3px 0 #1a4a8a; }
   @media (max-width: 640px) { #chat { bottom: 64px; width: calc(100% - 120px); } }
+  /* arena: match bar, kill feed, foe tags and the knockout screen */
+  #arenaBar { left: 50%; top: 10px; transform: translateX(-50%); padding: 6px 18px; display: flex; gap: 16px; align-items: center; border-radius: 999px; font: 18px 'Lilita One', sans-serif; white-space: nowrap; }
+  #arenaBar b { color: var(--orange); font-weight: 400; } #arenaBar .k { color: var(--lime); } #arenaBar .d { color: #ff6a6a; }
+  #killFeed { position: fixed; z-index: 3; left: 50%; top: 58px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+  .kill { padding: 4px 12px; border-radius: 12px; background: rgba(18, 6, 28, 0.82); border: 2px solid var(--rim); font: 15px 'Lilita One', sans-serif; display: flex; gap: 8px; align-items: center; transition: opacity 0.6s; }
+  .kill .me { color: var(--lime); } .kill .them { color: #ffb0d8; } .kill.mine { border-color: var(--lime); }
+  .tag.foe { color: #ffb0b0; border-color: rgba(255, 74, 74, 0.7); }
+  .tag.foe .thp { width: 74px; margin-left: auto; margin-right: auto; } .tag.foe .thp i { background: #ff4a4a; }
+  #death { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(40, 0, 10, 0.2), rgba(70, 0, 20, 0.65)); backdrop-filter: grayscale(0.7); }
+  #death .card { position: static; text-align: center; padding: 26px 40px 22px; }
+  #death h1 { margin: 0; font: 54px 'Lilita One', sans-serif; color: #ff5a5a; text-shadow: 0 4px 0 #2a0612; }
+  #death p { margin: 8px 0 0; font: 800 18px 'Nunito', sans-serif; color: #f2dcea; } #death p b { color: #ffb0d8; }
+  #deathStats { margin-top: 10px; font: 800 15px 'Nunito', sans-serif; color: #e7c9f2; }
+  #deathCount { margin-top: 18px; font: 22px 'Lilita One', sans-serif; color: var(--orange); }
+  #death .btns { margin-top: 18px; display: flex; gap: 10px; justify-content: center; }
+  #death button { padding: 9px 18px; border-radius: 999px; font-size: 17px; border: 3px solid #2a0a3a; background: linear-gradient(#e6ff7a, #a8e000); color: #1e3000; cursor: pointer; }
+  #death button.alt { background: #4a1a62; color: #fff; }
   #fade { position: fixed; inset: 0; z-index: 9; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.7s; }
 
   @media (max-width: 640px) {
@@ -194,7 +211,7 @@ else if (!localStorage.getItem('taproot_character')) window.location.replace('/g
   <button id="jumpBtn" type="button" tabindex="-1" aria-label="Jump">JUMP</button>
   <button id="attackBtn" type="button" tabindex="-1" aria-label="Attack">&#9876;&#65039;</button>
 </div>
-<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>J</b> attack &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag &middot; <b>T</b> chat</div>
+<div class="help"><b>WASD</b> move &middot; <b>Drag / Q E</b> look &middot; <b>Space</b> jump &middot; <b>'</b> / <b>J</b> right hand &middot; <b>;</b> left hand &middot; <b>Shift</b> nitro &middot; <b>C</b> camera &middot; <b>F</b> use &middot; <b>H</b> potion &middot; <b>B</b> bag &middot; <b>U</b> sprint toggle &middot; <b>T</b> chat</div>
 <div id="chat">
   <div id="chatLog"></div>
   <div id="chatRow" hidden><input id="chatIn" type="text" placeholder="Say something..." maxlength="200" autocomplete="off"><button id="chatSend" type="button">Send</button></div>
@@ -212,6 +229,15 @@ else if (!localStorage.getItem('taproot_character')) window.location.replace('/g
   <div class="bag-head">Bag <span id="bagGold"></span></div>
   <div class="bag-grid" id="bagGrid"></div>
 </div>
+<div class="panel" id="arenaBar" hidden><b>ARENA</b><span class="k" id="arenaK"></span><span class="d" id="arenaD"></span><span id="arenaN"></span></div>
+<div id="killFeed"></div>
+<div id="death" hidden><div class="panel card">
+  <h1>DEFEATED</h1>
+  <p>You were taken down by <b id="deathBy"></b></p>
+  <div id="deathStats"></div>
+  <div id="deathCount"></div>
+  <div class="btns"><button id="againBtn" type="button">Back in the arena</button><button id="cityBtn" class="alt" type="button">Stay in the city</button></div>
+</div></div>
 <div id="fade"></div>
 
 <script type="module">
@@ -233,7 +259,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { makeHero3D } from '/game/lib/hero3d.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { makeHero3D, loadBlenderParts } from '/game/lib/hero3d.js';
+import { loadBlenderHero, makeBlenderHero } from '/game/lib/blenderhero.js';
 import { SHOPS, SELL, RECIPES, CONSUMABLES } from './shops.js';
 
 const AREA = new URLSearchParams(location.search).get('area');
@@ -404,8 +432,10 @@ const AREAS = {
       { edge: 'w', range: [16, 19], href: '/game/world3d/?area=woods&from=city', name: 'Taproot Woods' },
       { edge: 'n', range: [22, 26], href: '/game/world3d/?area=avenues&from=city', name: 'Taproot Avenues' },
     ],
-    doors: [{ x: 7, y: 8, w: 1, h: 1, href: '/game/world3d/?area=workshop&from=city', name: 'Workshop' }],
-    arrive: { world: { x: 23.5, y: 30.5 }, woods: { x: 4, y: 17.5 }, avenues: { x: 23.5, y: 4 }, workshop: { x: 7, y: 10 } },
+    doors: [{ x: 7, y: 8, w: 1, h: 1, href: '/game/world3d/?area=workshop&from=city', name: 'Workshop' },
+      { x: 40, y: 8, w: 1, h: 1, href: '/game/world3d/?area=arena&from=city', name: 'Taproot Arena' }],
+    arrive: { world: { x: 23.5, y: 30.5 }, woods: { x: 4, y: 17.5 }, avenues: { x: 23.5, y: 4 }, workshop: { x: 7, y: 10 }, arena: { x: 40, y: 10 },
+      respawn: { x: 23.5, y: 21 } }, // the plaza, where arena fighters come back after a knockout
     spawn: [],
   },
 
@@ -424,6 +454,22 @@ const AREAS = {
     start: { x: 6, y: 7 },
     exits: [{ edge: 's', range: [6, 7], href: '/game/world3d/?area=city&from=workshop', name: 'Taproot City' }],
     arrive: { city: { x: 6, y: 7 } },
+    spawn: [],
+  },
+
+  // The PvP arena behind Hero Hall: a round sand pit (radius 14 tiles) ringed by a stone wall and
+  // stands, four broken columns for cover, four spawn pads and a gate on the south side back to the
+  // city. Player hits only do damage in here. Built in code below (see ARENA).
+  arena: {
+    title: 'Taproot Arena',
+    size: [36, 36],
+    arena: true,
+    town: true,
+    sky: 'day',
+    paths: [], ponds: [], tall: [], objects: [], bushes: [], stumps: [], flowers: [], trees: [], treeKind: () => 'tree_pine',
+    start: { x: 17, y: 30 },
+    exits: [{ edge: 's', range: [16, 19], href: '/game/world3d/?area=city&from=arena', name: 'Taproot City' }],
+    arrive: {},
     spawn: [],
   },
 
@@ -600,6 +646,10 @@ const DAY = A.sky === 'day'; // blue sky, clouds and real mountains instead of t
 const TOWN = !!A.town;
 const INDOOR = !!A.indoor; // a room: plank floor, walls, warm lamps, no sky     // city areas use the Phaser town look: timber cottages, cobbles, no neon
 const UNDER = !!A.map;      // underground: no sky, dark fog, torches and a lantern
+const ARENA = !!A.arena;    // PvP: player hits do damage here
+const [ARENA_X, ARENA_Z] = [18, 17], ARENA_R = 14; // pit centre and radius, in tiles
+const ARENA_PADS = [0, Math.PI / 2, Math.PI, -Math.PI / 2 + 0.6].map((a) => [ARENA_X + Math.cos(a) * 10.5, ARENA_Z + Math.sin(a) * 10.5]);
+const ARENA_COLS = [1, 3, 5, 7].map((k) => [ARENA_X + Math.cos(k * Math.PI / 4) * 6.5, ARENA_Z + Math.sin(k * Math.PI / 4) * 6.5]);
 const CAVE = UNDER ? (await (await fetch(A.map)).json()).rows : null;
 const { paths: PATHS, ponds: PONDS, tall: TALL, start: START, bushes: BUSHES, stumps: STUMPS, flowers: FLOWERS,
   trees: TREES, fences: FENCES = [], spawn: SPAWN_LIST } = A;
@@ -730,6 +780,12 @@ if (INDOOR) {
   for (let x = 0; x < MAP_W; x++) { blocked[0][x] = true; if (x < g0 || x > g1) blocked[MAP_H - 1][x] = true; }
   for (let y = 0; y < MAP_H; y++) blocked[y][0] = blocked[y][MAP_W - 1] = true;
 }
+if (ARENA) { // everything outside the pit wall, except the gate passage south to the exit
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const out = Math.hypot(x + 0.5 - ARENA_X, y + 0.5 - ARENA_Z) > ARENA_R - 0.6, gate = x >= 16 && x <= 19 && y >= ARENA_Z + 10;
+    blocked[y][x] = out && !gate;
+  }
+}
 (A.doors || []).forEach((d) => { for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) blocked[y][x] = false; });
 FENCES.forEach(([x1, x2, row]) => { block(x1, row, x2 - x1 + 1, 1); placed.push({ key: 'fence', tx: x1, ty: row, w: x2 - x1 + 1, h: 1 }); });
 const gateAt = (x1, x2) => Math.floor((x1 + x2) / 2) - 1; // first of the three open gate tiles
@@ -783,6 +839,7 @@ const groundChunks = []; // { canvas, glow, x, y } in texture pixels
   const PLANK = [rgb('#b07a48'), rgb('#946238')], PLANK_J = rgb('#5a3a22');
   const COBBLE = [rgb('#b4b0a6'), rgb('#94908a')], COBBLE_J = rgb('#5e5a58'), COBBLE_K = rgb('#d2ccbe');
   const ROCK_D = [rgb('#241c34'), rgb('#1a1428')], ROCK_F = [rgb('#4a405e'), rgb('#3c344e')], POOL = [rgb('#1a6a8a'), rgb('#124a6a')];
+  const SAND_A = [rgb('#e8cc92'), rgb('#d8b67a')], SAND_RIM = rgb('#c8a66c'), SAND_RED = rgb('#b8452e');
   const DEEP = rgb('#2f6cc0'), RIPPLE = rgb('#6aa8e8'), SHALLOW = rgb('#4c96d6'), FOAM = rgb('#dcf4ff');
   const NONE = [0, 0, 0], G_FOAM = rgb('#2ac8ff'), G_WATER = rgb('#0a1c50'); // glow only underground
   const styleAt = A.groundAt || (() => (TOWN ? 'town' : A.ground || 'grass'));
@@ -871,6 +928,18 @@ const groundChunks = []; // { canvas, glow, x, y } in texture pixels
           const d = near(gx, gy, (a, b) => cell(a, b) !== '~', 6);
           c = d <= 2 ? FOAM : mix(POOL[0], POOL[1], n2); g = d <= 2 ? G_FOAM : G_WATER;
         } else { c = mix(ROCK_F[0], ROCK_F[1], n2); if (hash(px >> 3, py >> 3, 77) > 0.93) c = mix(c, [255, 255, 255], 0.08); }
+      }
+      if (ARENA) { // raked sand in the pit with a painted emblem in the middle; flagstones outside
+        const r = Math.hypot(px / T - ARENA_X, py / T - ARENA_Z);
+        if (r < ARENA_R) {
+          c = mix(SAND_A[0], SAND_A[1], vnoise(px, py, 8));
+          if (Math.sin(r * 9) > 0.85) c = mix(c, [150, 110, 60], 0.12); // rake rings
+          if (r > 2.9 && r < 3.2) c = SAND_RIM; else if (r > 0.95 && r < 1.2) c = SAND_RED;
+          else if (r > ARENA_R - 0.35) c = mix(c, [60, 40, 20], 0.25);
+        } else {
+          const row = Math.floor(py / 8), bx = (px + (row % 2) * 6) % 12;
+          c = py % 8 < 0.8 || bx < 0.8 ? COBBLE_J : mix(COBBLE[0], COBBLE[1], hash(Math.floor((px + (row % 2) * 6) / 12), row, 46));
+        }
       }
       const k = (y * w + x) * 4;
       img.data[k] = c[0]; img.data[k + 1] = c[1]; img.data[k + 2] = c[2]; img.data[k + 3] = 255;
@@ -1447,8 +1516,45 @@ const seaMat = DAY ? toon({ color: '#3f86d8', emissive: '#0a2850' }) : toon({ co
 const signs = []; // named buildings get a floating sign
 const circles = []; // round colliders [x, z, r] on top of the tile grid
 const boats = [];   // { g, x, y, z, ph, sail? } bob on the water; sailing ones cruise back and forth
+// Style test: ?blender=1 swaps the town cottages for the Blender-built model (tools/blender/cottage.py).
+const BLENDER = new URLSearchParams(location.search).has('blender');
+const BLENDER_COTTAGE = BLENDER ? (await new GLTFLoader().loadAsync('/game/assets3d/cottage.glb')).scene : null;
+// Style test: ?hero=blender makes your own hero the fully modelled, rigged Blender character.
+const BLENDER_HERO = new URLSearchParams(location.search).get('hero') === 'blender';
+if (BLENDER || BLENDER_HERO) await loadBlenderParts('/game/assets3d/hero_parts.glb');
+if (BLENDER_HERO) await loadBlenderHero('/game/assets3d/hero_blender.glb');
+// Trees are instanced: one geometry per kind (node transforms baked in), drawn hundreds of times.
+const BLENDER_TREES = {};
+if (BLENDER) await Promise.all(['tree_round', 'tree_oak', 'tree_pine'].map(async (k) => {
+  const g = (await new GLTFLoader().loadAsync(`/game/assets3d/${k}.glb`)).scene;
+  g.updateMatrixWorld(true);
+  const geos = [];
+  g.traverse((o) => { if (o.isMesh) geos.push(o.geometry.clone().applyMatrix4(o.matrixWorld)); });
+  BLENDER_TREES[k] = { geo: geos.length > 1 ? mergeGeometries(geos) : geos[0], spots: [] };
+}));
+function addModel(src, x, z, ry, sx, sz) {
+  const m = src.clone(true);
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = toon({ map: o.material.map });
+    o.castShadow = o.receiveShadow = true;
+  });
+  m.position.set(x, 0, z);
+  m.rotation.y = ry;
+  m.scale.set(sx, (sx + sz) / 2, sz);
+  scene.add(m);
+}
 placed.forEach(({ key, tx, ty, w, h, name, ry }) => {
   const r = hash(tx, ty, 71);
+  if (BLENDER_TREES[key]) {
+    BLENDER_TREES[key].spots.push([tx + w / 2, ty + h / 2, r * Math.PI * 2, 0.85 + hash(tx, ty, 72) * 0.35]);
+    return;
+  }
+  if (BLENDER_COTTAGE && TOWN && (key === 'house_a' || key === 'house_b')) {
+    if (name) signs.push({ x: tx + w / 2, z: ty + h / 2, y: 4.9, name });
+    addModel(BLENDER_COTTAGE, tx + w / 2, ty + h / 2, ry || 0, (w - 0.7) / 4.3, (h - 0.7) / 3.3);
+    return;
+  }
   if (A.sailing && /ship|sloop|rowboat/.test(key)) {
     boats.push({ g: buildGroup(() => BUILD[key](r, w, h)), x: tx + w / 2, y: 0, z: ty + h / 2, ph: r * 6 });
     return;
@@ -1466,6 +1572,23 @@ placed.forEach(({ key, tx, ty, w, h, name, ry }) => {
   at(tx + w / 2, ty + h / 2, tree || key === 'boulder' || key === 'crystal' ? r * Math.PI * 2 : ry || 0, tree ? 0.85 + hash(tx, ty, 72) * 0.35 : 1);
   ((TOWN && TOWN_BUILD[key]) || BUILD[key] || BUILD.crate)(r, w, h, name || '');
 });
+
+// One instanced mesh per tree kind per 24-tile chunk, so chunks off screen (or outside the
+// shadow camera) are culled instead of drawing every tree on the map every frame.
+{
+  const mat = toon({ vertexColors: true }), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+  for (const { geo, spots } of Object.values(BLENDER_TREES)) {
+    const chunks = new Map();
+    for (const sp of spots) { const k = `${Math.floor(sp[0] / 24)},${Math.floor(sp[1] / 24)}`; (chunks.get(k) || chunks.set(k, []).get(k)).push(sp); }
+    for (const list of chunks.values()) {
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach(([x, z, ry, s], i) => im.setMatrixAt(i, m.compose(p.set(x, 0, z), q.setFromEuler(e.set(0, ry, 0)), sc.set(s, s, s))));
+      im.computeBoundingSphere();
+      im.castShadow = im.receiveShadow = true;
+      scene.add(im);
+    }
+  }
+}
 
 // piers and the quay: plank boards (alternating tones) on posts over the water
 PLANKS.forEach(([x1, y1, x2, y2, kind]) => {
@@ -1550,6 +1673,78 @@ if (INDOOR) {
   put('toon', 'cyl', '#2a2420', 0, 3.25, 0, 0.02, 0.5, 0.02);
   put('glow', 'sph', '#ffe8b0', 0, 2.92, 0, 0.16);
   put('toon', 'cone', '#3a3438', 0, 3.05, 0, 0.26, 0.18, 0.26);
+}
+
+// arena: stone pit wall, three tiers of stands with a crowd, a gatehouse on the south side,
+// broken columns for cover, braziers, red and blue banners and glowing spawn pads
+if (ARENA) {
+  const R = ARENA_R, gap = (a, half) => Math.abs(wrapAngle(a - Math.PI / 2)) < half; // the gate faces south (+z)
+  const ring = (n, rad, fn, half = 0) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; if (!half || !gap(a, half)) fn(a, ARENA_X + Math.cos(a) * rad, ARENA_Z + Math.sin(a) * rad, i); } };
+  const along = (a) => -a - Math.PI / 2; // turns a box so its x axis runs along the ring
+  at(0, 0);
+  ring(64, R + 0.4, (a, x, z, i) => {
+    put('toon', 'box', i % 2 ? '#9a948a' : '#8a847a', x, 1.2, z, 1.45, 2.4, 0.8, 0, along(a));
+    put('toon', 'box', '#b8b2a6', x, 2.5, z, 1.5, 0.25, 0.95, 0, along(a));
+  }, 0.16);
+  const CROWD = ['#e05a4a', '#4a7ae0', '#f0c040', '#6ac86a', '#c86af0', '#f0a06a', '#ffffff'];
+  for (let t = 0; t < 3; t++) {
+    const rad = R + 1.6 + t * 1.6, top = 2.6 + t * 1.2;
+    ring(72, rad, (a, x, z, i) => {
+      put('toon', 'box', t % 2 ? '#a8a296' : '#b4aea2', x, top / 2, z, rad * 0.092, top, 1.6, 0, along(a));
+      if (hash(i, t, 131) > 0.45) { // a spectator: body and head
+        const c = CROWD[Math.floor(hash(i, t, 132) * CROWD.length)], ox = Math.cos(a) * 0.2, oz = Math.sin(a) * 0.2;
+        put('toon', 'box', c, x + ox, top + 0.3, z + oz, 0.42, 0.6, 0.3, 0, along(a));
+        put('toon', 'sph', ['#f2c8a0', '#d8a070', '#a8704a'][i % 3], x + ox, top + 0.8, z + oz, 0.2);
+      }
+    }, 0.24);
+  }
+  // gatehouse: two towers, a lintel and a raised portcullis over the passage south
+  const gz = ARENA_Z + R + 0.6;
+  for (const sx of [-1, 1]) {
+    put('toon', 'box', '#8a847a', ARENA_X + sx * 2.6, 3.1, gz, 1.6, 6.2, 1.6);
+    put('toon', 'box', '#b8b2a6', ARENA_X + sx * 2.6, 6.3, gz, 1.9, 0.3, 1.9);
+    put('flat', 'pyr', '#6a4a8a', ARENA_X + sx * 2.6, 7.0, gz, 1.25, 1.2, 1.25, 0, Math.PI / 4, 0);
+  }
+  put('toon', 'box', '#9a948a', ARENA_X, 5.0, gz, 6.8, 1.2, 1.4);
+  for (let i = 0; i < 7; i++) put('toon', 'box', '#3a3640', ARENA_X - 1.8 + i * 0.6, 3.95, gz - 0.1, 0.12, 1.3, 0.2);
+  put('toon', 'box', '#3a3640', ARENA_X, 3.4, gz - 0.1, 4.2, 0.12, 0.2);
+  put('toon', 'box', '#c8383a', ARENA_X, 5.0, gz - 0.72, 2.6, 0.7, 0.05);
+  put('toon', 'box', '#e0b450', ARENA_X, 5.0, gz - 0.75, 0.5, 0.5, 0.05);
+  // broken columns
+  ARENA_COLS.forEach(([x, z], i) => {
+    const h = 1.6 + hash(i, 0, 133) * 1.4;
+    put('toon', 'cyl', '#a8a296', x, 0.18, z, 0.9, 0.36, 0.9);
+    put('toon', 'cyl', '#c8c2b6', x, 0.36 + h / 2, z, 0.6, h, 0.6);
+    put('toon', 'cyl', '#b0aa9e', x, 0.36 + h + 0.12, z, 0.68, 0.24, 0.68, 0.12, 0, 0.1);
+    put('toon', 'box', '#a8a296', x + 1.0, 0.22, z - 0.3, 0.7, 0.44, 0.5, 0.3, i, 0.2); // a fallen chunk
+    circles.push([x, z, 0.75]);
+  });
+  // braziers (a few carry real light) and banners hung on the inner wall face
+  let lit = 0;
+  ring(8, R - 0.6, (a, x, z, i) => {
+    put('toon', 'cyl', '#3a3640', x, 0.7, z, 0.12, 1.4, 0.12);
+    put('toon', 'cone', '#3a3640', x, 1.52, z, 0.42, 0.34, 0.42, Math.PI);
+    put('glow', 'cone', '#ff8a2a', x, 1.95, z, 0.3, 0.6, 0.3);
+    put('glow', 'cone', '#ffe08a', x, 1.85, z, 0.16, 0.36, 0.16);
+    circles.push([x, z, 0.35]);
+    if (i % 2 === 0 && lit++ < 4) {
+      const l = new THREE.PointLight('#ffa050', 6, 9, 1.5);
+      l.position.set(x, 2.3, z);
+      l.userData.base = 6;
+      scene.add(l);
+      flicker.push(l);
+    }
+  }, 0.3);
+  ring(8, R - 0.06, (a, x, z) => {
+    const team = Math.cos(a) > 0 ? '#c8383a' : '#3a5ad8';
+    put('toon', 'box', team, x, 1.55, z, 1.0, 1.6, 0.06, 0, along(a));
+    put('toon', 'box', '#e0b450', x - Math.cos(a) * 0.04, 1.7, z - Math.sin(a) * 0.04, 0.4, 0.4, 0.06, 0, along(a));
+  }, 0.5);
+  // spawn pads
+  ARENA_PADS.forEach(([x, z]) => {
+    put('glow', 'tor', '#5affc8', x, 0.06, z, 0.9, 0.9, 0.35, Math.PI / 2);
+    put('toon', 'cyl', '#c8e8d8', x, 0.02, z, 0.75, 0.03, 0.75);
+  });
 }
 
 // flowers: little lollipops in clusters, like the 2D page
@@ -1897,7 +2092,7 @@ function grassMesh(spots, height, width, baseCol, tipCol) {
   if (green.length) grassMesh(green, 0.65, 0.06, '#2a8a22', '#d8ff4a');
   if (dry.length) grassMesh(dry, 0.6, 0.06, '#9a7a2a', '#ffe08a');
   // loose tufts scattered over open grass
-  for (let n = 0, tries = 0; n < (CAVE || INDOOR ? 0 : 420) && tries < 6000; tries++) {
+  for (let n = 0, tries = 0; n < (CAVE || INDOOR || ARENA ? 0 : 420) && tries < 6000; tries++) {
     const x = hash(tries, 1, 321) * MAP_W, z = hash(tries, 2, 322) * MAP_H, cx = Math.floor(x), cy = Math.floor(z);
     if (blocked[cy][cx] || tallType(cx, cy) || pathEdge(x * T, z * T) < 0.25 || waterAt(x * T, z * T) >= 0 || (A.beach && A.beach(x, z)) || gridKind(x, z) || plotAt(x, z)) continue;
     for (let i = 0; i < 4; i++) tuftSpots.push([x + (hash(n, i, 323) - 0.5) * 0.18, z + (hash(n, i, 324) - 0.5) * 0.18, 1]);
@@ -1939,6 +2134,24 @@ let charData = (() => {
     return d;
   } catch (e) { return null; }
 })();
+// Local testing: on the local server your character always holds the iron sword and the Inferno Staff,
+// one in each hand (both hand slots); whichever one is missing goes in a free or non-weapon hand.
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && charData) {
+  const e = Object.assign({}, charData.equipment);
+  const want = ['iron_sword', 'inferno_staff'];
+  for (const id of want) {
+    if (e.rhand === id || e.lhand === id) continue;
+    const hand = !want.includes(e.rhand) ? 'rhand' : 'lhand';
+    e[hand] = id;
+  }
+  charData.equipment = e;
+  try {
+    localStorage.setItem('taproot_character', JSON.stringify(charData));
+    const own = JSON.parse(localStorage.getItem('taproot_owned') || '[]');
+    for (const id of want) if (!own.includes(id)) own.push(id);
+    localStorage.setItem('taproot_owned', JSON.stringify(own));
+  } catch (err) {}
+}
 const HERO_H = 1.55; // head-top height, for name tags
 function makeHero(look) {
   const h = makeHero3D(look);
@@ -2046,8 +2259,14 @@ try { camMode = Math.min(CAM_MODES.length - 1, Math.max(0, +localStorage.getItem
 let camYaw = 0, camPitch = CAM_MODES[camMode].pitch, camDist = CAM_MODES[camMode].dist, camPitchT = camPitch, camDistT = camDist;
 let fov = 58, shake = 0, lastDrag = -1e9;
 if (INDOOR) { camDist = camDistT = 7.5; camPitch = camPitchT = 0.95; }
-let hero = makeHero(charData || DEFAULT_CHAR);
-const P = { x: spawnAt.x + 0.5, z: spawnAt.y + 0.75, y: 0, vy: 0, heading: Math.PI, phase: 0, atk: -1, grounded: 0 };
+function makePlayerHero(look) {
+  if (!BLENDER_HERO) return makeHero(look);
+  const h = makeBlenderHero(look);
+  scene.add(h.root);
+  return h;
+}
+let hero = makePlayerHero(charData || DEFAULT_CHAR);
+const P = { x: spawnAt.x + 0.5, z: spawnAt.y + 0.75, y: 0, vy: 0, heading: Math.PI, phase: 0, atk: -1, atkL: -1, grounded: 0 };
 if (A.arrive[from]) { // arriving through a gate: face into the map, not back at the gate
   P.heading = Math.atan2(MAP_W / 2 - P.x, MAP_H / 2 - P.z);
   camYaw = P.heading + Math.PI;
@@ -2071,7 +2290,13 @@ function computeStats3d() {
   return s;
 }
 const stats = computeStats3d();
-let hp = stats.hp, inv = 0, attackCd = 0, pkb = { x: 0, z: 0, t: 0 };
+let hp = stats.hp, inv = 0, attackCd = 0, attackCdL = 0, pkb = { x: 0, z: 0, t: 0 };
+let safeUntil = 0; // arena: no damage until then (spawn shield)
+if (ARENA) {
+  const [x, z] = ARENA_PADS[Math.floor(Math.random() * ARENA_PADS.length)];
+  P.x = x; P.z = z; P.heading = Math.atan2(ARENA_X - x, ARENA_Z - z); camYaw = P.heading + Math.PI;
+  safeUntil = performance.now() + 2000; inv = 2; // blink while shielded
+}
 let field = null;
 try { field = JSON.parse(localStorage.getItem(FIELD_KEY)); } catch (e) {}
 field = Object.assign({ xp: 0, kills: 0, gold: 0 }, field);
@@ -2130,6 +2355,22 @@ function cycleCam() {
   cycleCam.timer = setTimeout(() => { t.hidden = true; }, 1200);
 }
 
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.hidden = true; }, 1200);
+}
+// Sprint toggle: U turns the nitro sprint on so you don't have to hold Shift. Pressing Shift
+// (or U again) turns it off and you walk; that Shift press doesn't count as holding Shift.
+let sprintOn = false, shiftCancel = false;
+function setSprint(on) {
+  if (sprintOn === on) return;
+  sprintOn = on;
+  toast(on ? 'Sprint on (Shift or U to walk)' : 'Walking');
+}
+
 /* ---------- shops, crafting, gear and potions ---------- */
 let owned = [];
 try { owned = JSON.parse(localStorage.getItem('taproot_owned')) || []; } catch (e) {}
@@ -2157,6 +2398,12 @@ const openShop = (name) => { modal = { kind: 'shop', name, tab: 'buy' }; toggleB
 const openCraft = () => { modal = { kind: 'craft' }; toggleBag(false); renderModal(); };
 function closeModal() { modal = null; $('shopPanel').hidden = true; }
 function gearButton(id) {
+  const eq = (charData || DEFAULT_CHAR).equipment || {};
+  if (ITEM(id).slot === 'rhand') { // weapons go in either hand (dual wield)
+    const b = (h) => (eq[h] === id ? `<button disabled>${h === 'rhand' ? 'In R' : 'In L'}</button>`
+      : `<button class="alt" data-act="equip" data-id="${id}" data-slot="${h}">Equip ${h === 'rhand' ? 'R' : 'L'}</button>`);
+    return b('rhand') + b('lhand');
+  }
   if (equippedIds().includes(id)) return '<button disabled>Equipped</button>';
   return `<button class="alt" data-act="equip" data-id="${id}">Equip</button>`;
 }
@@ -2218,23 +2465,27 @@ function shopAct(act, id, extra) {
     floatText(P.x, 2.2, P.z, `Crafted ${nameOf(id)}!`, '#7ae0ff');
     hero.emote('happy', 1.2);
     burst(P.x, 1.2, P.z, '#7ae0ff', 14);
-  } else if (act === 'equip') equip(id);
+  } else if (act === 'equip') equip(id, extra);
   saveField();
   updateHud();
   renderBag();
   renderModal();
 }
 // Put an owned item on, save it with the character and rebuild the 3D hero.
-function equip(id) {
+function equip(id, slot) {
   const it = ITEM(id);
   if (!it) return;
+  slot = it.slot === 'rhand' && slot === 'lhand' ? 'lhand' : it.slot; // weapons may go in the left hand
   charData = charData || JSON.parse(JSON.stringify(DEFAULT_CHAR));
-  charData.equipment = Object.assign({}, charData.equipment, { [it.slot]: id });
+  const eq = Object.assign({}, charData.equipment);
+  for (const h of ['rhand', 'lhand']) if (h !== slot && eq[h] === id) delete eq[h]; // one item, one hand
+  eq[slot] = id;
+  charData.equipment = eq;
   try { localStorage.setItem(HAD_CHAR ? 'taproot_character' : 'taproot3d_look', JSON.stringify(charData)); } catch (e) {}
   const pos = hero.root.position.clone(), ry = hero.root.rotation.y;
   hero.dispose();
   hero.root.removeFromParent();
-  hero = makeHero(charData);
+  hero = makePlayerHero(charData);
   hero.root.position.copy(pos);
   hero.root.rotation.y = ry;
   const before = stats.hp;
@@ -2264,16 +2515,18 @@ function jump() {
   P.grounded = 1;
 }
 
-function swing() {
-  if (fainted || modal || attackCd > 0) return;
-  attackCd = hero.caster ? hero.caster.cd : 0.36;
-  P.atk = 0;
-  mp.atk = Math.round(performance.now()); // stamp the swing so other players see it once
-  if (hero.caster) { setTimeout(castBall, 120); return; } // wands and staffs shoot instead
+// hand 'R' (J, K or ') or 'L' (;): each hand has its own weapon, swing and cooldown (dual wield)
+function swing(hand = 'R') {
+  const L = hand === 'L', caster = L ? hero.casterL : hero.caster;
+  if (fainted || modal || (L ? attackCdL : attackCd) > 0) return;
+  if (L) { attackCdL = caster ? caster.cd : 0.36; P.atkL = 0; mp.atkL = Math.round(performance.now()); }
+  else { attackCd = caster ? caster.cd : 0.36; P.atk = 0; mp.atk = Math.round(performance.now()); } // stamp the swing so other players see it once
+  if (caster) { setTimeout(() => castBall(hand), 120); return; } // wands and staffs shoot instead
   // hits land when the swing connects (the hero draws the blade trail itself)
   setTimeout(() => {
     const hx = P.x + Math.sin(P.heading) * 0.75, hz = P.z + Math.cos(P.heading) * 0.75;
     for (const m of monsters) if (!m.dead && Math.hypot(m.x - hx, m.z - hz) < (m.cfg.big ? 1.25 : 0.95)) hitMonster(m);
+    if (ARENA) for (const g of ghosts.values()) if (Math.hypot(g.x - hx, g.z - hz) < 0.95 && Math.abs(g.y - P.y) < 1.2) hitPlayer(g, stats.atk, hand);
   }, 110);
 }
 function hitMonster(m, power = stats.atk) {
@@ -2290,11 +2543,13 @@ function hitMonster(m, power = stats.atk) {
 const fireballs = [], blasts = [];
 const FB_LIGHTS = [0, 1, 2, 3].map(() => { const l = new THREE.PointLight('#ff8a3a', 0, 7, 1.6); scene.add(l); return l; }); // pooled: adding lights live recompiles shaders
 const FB_GEO = new THREE.SphereGeometry(1, 16, 12);
-function castBall() {
-  const c = hero.caster;
+function castBall(hand = 'R') {
+  const c = hand === 'L' ? hero.casterL : hero.caster;
   if (!c || fainted) return;
-  hero.tipWorld(V);
-  const dx = Math.sin(P.heading), dz = Math.cos(P.heading), s = c.size;
+  (hand === 'L' ? hero.tipWorldL : hero.tipWorld)(V);
+  // aim from the tip at a point straight ahead of the player, so shots from either hand converge on the target line
+  const ax = P.x + Math.sin(P.heading) * 8 - V.x, az = P.z + Math.cos(P.heading) * 8 - V.z, al = Math.hypot(ax, az) || 1;
+  const dx = ax / al, dz = az / al, s = c.size;
   const g = new THREE.Group();
   const core = new THREE.Mesh(FB_GEO, new THREE.MeshBasicMaterial({ color: '#fff4c0' }));
   core.scale.setScalar(0.11 * s);
@@ -2308,7 +2563,7 @@ function castBall() {
   scene.add(g);
   const light = FB_LIGHTS.find((l) => !l.userData.busy);
   if (light) { light.userData.busy = true; light.color.set(c.color); light.intensity = 6; }
-  fireballs.push({ g, halo, x, y, z, dx, dz, dist: 0, light, c, trailT: 0 });
+  fireballs.push({ g, halo, x, y, z, dx, dz, dist: 0, light, c, trailT: 0, hand });
   burst(x, y, z, c.color, 5);
 }
 function explode(fb) {
@@ -2320,6 +2575,7 @@ function explode(fb) {
   scene.add(b);
   blasts.push({ m: b, age: 0, r: 0.6 + c.aoe * 0.6 });
   if (c.aoe) for (const m of monsters) if (!m.dead && Math.hypot(m.x - x, m.z - z) < c.aoe) hitMonster(m, stats.atk * 0.5 + stats.mag * 0.8);
+  if (c.aoe && ARENA) for (const g of ghosts.values()) if (g !== fb.foe && Math.hypot(g.x - x, g.z - z) < c.aoe) hitPlayer(g, stats.atk * 0.5 + stats.mag * 0.8, fb.hand, true);
   scene.remove(fb.g);
   fb.g.traverse((o) => o.material && o.material.dispose());
   if (fb.light) { fb.light.userData.busy = false; fb.light.intensity = 0; }
@@ -2342,8 +2598,10 @@ function updateFireballs(dt, t) {
     const cx = Math.floor(fb.x), cz = Math.floor(fb.z);
     const wall = cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H || (blocked[cz][cx] && waterAt(fb.x * T, fb.z * T) < 0)
       || circles.some(([x, z, r]) => Math.hypot(fb.x - x, fb.z - z) < r);
+    if (ARENA) for (const g of ghosts.values()) if (!g.dead && Math.hypot(g.x - fb.x, g.z - fb.z) < 0.7 && fb.y > g.y && fb.y < g.y + 1.8) { fb.foe = g; break; }
     if (hit) hitMonster(hit, stats.atk * 0.6 + stats.mag * 1.4);
-    if (hit || wall || fb.dist > fb.c.range) { explode(fb); fireballs.splice(i, 1); }
+    if (fb.foe) hitPlayer(fb.foe, stats.atk * 0.6 + stats.mag * 1.4, fb.hand, true);
+    if (hit || fb.foe || wall || fb.dist > fb.c.range) { explode(fb); fireballs.splice(i, 1); }
   }
   for (let i = blasts.length - 1; i >= 0; i--) {
     const b = blasts[i];
@@ -2507,8 +2765,8 @@ function drawMinimap(now) {
    tile coordinates. Each client sends its position about 8 times a second while moving (and a
    ping every 3 s); others ease toward it, so their heroes walk and turn smoothly. Players in the
    mine or the workshop only see each other there (the 'room' field). */
-const MP_ROOM = UNDER ? 'cave' : INDOOR ? AREA : 'world';
-const mp = { id: Math.random().toString(36).slice(2, 10), live: false, last: 0, sent: null, atk: 0 };
+const MP_ROOM = UNDER ? 'cave' : INDOOR || ARENA ? AREA : 'world';
+const mp = { id: Math.random().toString(36).slice(2, 10), live: false, last: 0, sent: null, atk: 0, atkL: 0 };
 mp.name = (charData && charData.name && charData.name.trim()) || 'Wanderer';
 const ghosts = new Map();
 let chatOpen = false;
@@ -2534,17 +2792,18 @@ function chatLine(name, msg, sys) {
   setTimeout(() => el.remove(), 30000);
 }
 function myState() {
-  return { id: mp.id, name: mp.name, char: charData, room: MP_ROOM, x: +P.x.toFixed(2), z: +P.z.toFixed(2), y: +P.y.toFixed(2), h: +P.heading.toFixed(2), atk: mp.atk };
+  return { id: mp.id, name: mp.name, char: charData, room: MP_ROOM, x: +P.x.toFixed(2), z: +P.z.toFixed(2), y: +P.y.toFixed(2), h: +P.heading.toFixed(2), atk: mp.atk, atkL: mp.atkL, hp, mhp: stats.hp };
 }
 function addGhost(d) {
   if (d.id === mp.id || d.room !== MP_ROOM) return null;
   let g = ghosts.get(d.id);
   if (!g) {
     const tag = document.createElement('div');
-    tag.className = 'tag player';
-    tag.textContent = d.name || 'Wanderer';
+    tag.className = ARENA ? 'tag player foe' : 'tag player';
+    tag.innerHTML = safeText(d.name || 'Wanderer') + (ARENA ? '<div class="thp"><i></i></div>' : '');
     labelsEl.appendChild(tag);
-    g = { id: d.id, name: d.name || 'Wanderer', hero: makeHero(d.char || DEFAULT_CHAR), tag, bubble: { el: null, until: 0 }, x: d.x, z: d.z, y: 0, h: d.h || 0, tx: d.x, tz: d.z, ty: 0, th: d.h || 0, atk: -1, atkSeen: d.atk || 0 };
+    g = { id: d.id, name: d.name || 'Wanderer', hero: makeHero(d.char || DEFAULT_CHAR), tag, bubble: { el: null, until: 0 }, x: d.x, z: d.z, y: 0, h: d.h || 0, tx: d.x, tz: d.z, ty: 0, th: d.h || 0, atk: -1, atkSeen: d.atk || 0, atkL: -1, atkLSeen: d.atkL || 0 };
+    g.bar = tag.querySelector('.thp i');
     g.hero.root.position.set(d.x, 0, d.z); // start in place: the hero's springs read speed from how far the root moves
     ghosts.set(d.id, g);
     chatLine('', `${g.name} is here`, true);
@@ -2563,12 +2822,16 @@ function onState(d) {
   const g = addGhost(d);
   if (!g) { if (ghosts.has(d.id)) removeGhost(d.id); return; } // they walked into another room
   Object.assign(g, { tx: d.x, tz: d.z, ty: d.y || 0, th: d.h || 0, seen: performance.now() });
+  if (d.hp !== undefined) { g.hp = d.hp; g.mhp = d.mhp; }
   if (d.atk && d.atk !== g.atkSeen) { g.atkSeen = d.atk; g.atk = 0; }
+  if (d.atkL && d.atkL !== g.atkLSeen) { g.atkLSeen = d.atkL; g.atkL = 0; }
 }
 if (window.supabase) {
   const sb = window.supabase.createClient('https://azvdqigaqwbeakjieaps.supabase.co',
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dmRxaWdhcXdiZWFramllYXBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTE0NjEsImV4cCI6MjA5OTA2NzQ2MX0.QXBpcGKsot8A8w6rq76F6lvGjCVJN0NytDmfmE8C-Dw');
-  mp.channel = sb.channel('world3d-mp', { config: { broadcast: { self: false } } });
+  // local dev / test runs get their own channel, so they never show up for players on the live site
+  const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  mp.channel = sb.channel(LOCAL ? 'world3d-mp-dev' : 'world3d-mp', { config: { broadcast: { self: false } } });
   mp.channel
     .on('broadcast', { event: 'join' }, ({ payload }) => {
       const known = ghosts.has(payload.id);
@@ -2577,6 +2840,9 @@ if (window.supabase) {
     })
     .on('broadcast', { event: 'move' }, ({ payload }) => onState(payload))
     .on('broadcast', { event: 'leave' }, ({ payload }) => { const g = ghosts.get(payload.id); if (g) chatLine('', `${g.name} left`, true); removeGhost(payload.id); })
+    .on('broadcast', { event: 'hit' }, ({ payload }) => onHit(payload))
+    .on('broadcast', { event: 'ouch' }, ({ payload }) => onOuch(payload))
+    .on('broadcast', { event: 'ko' }, ({ payload }) => onKo(payload))
     .on('broadcast', { event: 'chat' }, ({ payload }) => {
       chatLine(payload.name, payload.msg);
       const g = ghosts.get(payload.id);
@@ -2622,7 +2888,7 @@ canvas.addEventListener('pointerdown', () => { if (chatOpen) closeChat(); });
 function updateMultiplayer(dt, now) {
   if (mp.live) {
     const st = myState(), prev = mp.sent;
-    const moved = !prev || Math.abs(st.x - prev.x) > 0.04 || Math.abs(st.z - prev.z) > 0.04 || Math.abs(st.y - prev.y) > 0.05 || Math.abs(wrapAngle(st.h - prev.h)) > 0.08 || st.atk !== prev.atk;
+    const moved = !prev || Math.abs(st.x - prev.x) > 0.04 || Math.abs(st.z - prev.z) > 0.04 || Math.abs(st.y - prev.y) > 0.05 || Math.abs(wrapAngle(st.h - prev.h)) > 0.08 || st.atk !== prev.atk || st.atkL !== prev.atkL;
     if (moved && now - mp.last > 120) { mp.channel.send({ type: 'broadcast', event: 'move', payload: st }); mp.sent = st; mp.last = now; }
   }
   for (const g of ghosts.values()) {
@@ -2630,16 +2896,25 @@ function updateMultiplayer(dt, now) {
     g.x = damp(g.x, g.tx, 10, dt); g.z = damp(g.z, g.tz, 10, dt); g.y = damp(g.y, g.ty, 14, dt);
     g.h += wrapAngle(g.th - g.h) * Math.min(1, dt * 12);
     if (g.atk >= 0) { g.atk += dt / 0.38; if (g.atk >= 1) g.atk = -1; }
+    if (g.atkL >= 0) { g.atkL += dt / 0.38; if (g.atkL >= 1) g.atkL = -1; }
     g.hero.root.position.set(g.x, g.y, g.z);
     g.hero.root.rotation.y = g.h;
-    g.hero.update(dt, { atk: g.atk, air: g.y > 0.02 });
-    const near = Math.hypot(g.x - P.x, g.z - P.z) < 30, pos = near ? toScreen(g.x, HERO_H + 0.35 + g.y, g.z) : null;
+    g.hero.root.visible = !g.dead;
+    if (g.bar && g.mhp) g.bar.style.width = `${Math.max(0, g.hp / g.mhp) * 100}%`;
+    g.hero.update(dt, { atk: g.atk, atkL: g.atkL, air: g.y > 0.02 });
+    const near = !g.dead && Math.hypot(g.x - P.x, g.z - P.z) < 30, pos = near ? toScreen(g.x, HERO_H + 0.35 + g.y, g.z) : null;
     g.tag.hidden = !pos;
     if (pos) g.tag.style.transform = `translate(${pos[0]}px, ${pos[1]}px) translate(-50%, -100%)`;
     placeBubble(g.bubble, near ? toScreen(g.x, HERO_H + 0.95 + g.y, g.z) : null, now);
   }
   placeBubble(myBubble, toScreen(P.x, HERO_H + 0.6 + P.y, P.z), now);
   const n = 1 + [...ghosts.values()].length;
+  if (ARENA) {
+    const k = `⚔ ${arena.kills} kill${arena.kills === 1 ? '' : 's'}`, d = `☠ ${arena.deaths} death${arena.deaths === 1 ? '' : 's'}`, f = `${n} fighter${n === 1 ? '' : 's'}`;
+    if ($('arenaK').textContent !== k) $('arenaK').textContent = k;
+    if ($('arenaD').textContent !== d) $('arenaD').textContent = d;
+    if ($('arenaN').textContent !== f) $('arenaN').textContent = f;
+  }
   const txt = mp.live ? `${mp.name} · Online here: ${n}` : window.supabase ? 'Connecting...' : 'Offline';
   if ($('mpText').textContent !== txt) $('mpText').textContent = txt;
 }
@@ -2648,6 +2923,87 @@ function placeBubble(b, pos, now) {
   const on = pos && now < b.until;
   b.el.hidden = !on;
   if (on) b.el.style.transform = `translate(${pos[0]}px, ${pos[1]}px) translate(-50%, -100%)`;
+}
+
+/* ---------- arena PvP ----------
+   The attacker's game decides a hit (sword reach or fireball contact against where it sees the other
+   player) and sends 'hit'. The target applies its own defence, owns its HP and tells everyone
+   ('ouch'), so every health bar agrees. At 0 HP it sends 'ko' (the kill feed), shows the knockout
+   screen and respawns at the city plaza. Hits are trusted for now: a server check can come later. */
+const arena = { kills: 0, deaths: 0 }; // this visit (the browser tab), kept across respawns
+try { Object.assign(arena, JSON.parse(sessionStorage.getItem('taproot_arena')) || {}); } catch (e) {}
+const saveArena = () => { try { sessionStorage.setItem('taproot_arena', JSON.stringify(arena)); } catch (e) {} };
+const weaponName = (hand) => { const id = ((charData || DEFAULT_CHAR).equipment || {})[hand === 'L' ? 'lhand' : 'rhand']; return id ? nameOf(id) : 'fists'; };
+function goTo(href) {
+  if (leaving) return;
+  leaving = true;
+  $('fade').style.opacity = 1;
+  setTimeout(() => { location.href = href; }, 350);
+}
+function hitPlayer(g, power, hand, magic) {
+  if (!ARENA || !mp.live || g.dead || fainted) return;
+  mp.channel.send({ type: 'broadcast', event: 'hit', payload: {
+    to: g.id, by: mp.id, name: mp.name, dmg: Math.max(1, Math.round(power + Math.random() * 4)),
+    x: +P.x.toFixed(2), z: +P.z.toFixed(2), weapon: weaponName(hand), magic: !!magic } });
+}
+function onHit(d) {
+  if (!ARENA || d.to !== mp.id || fainted || performance.now() < safeUntil) return;
+  const dmg = Math.max(1, Math.round(d.dmg * 50 / (50 + stats.def)));
+  hp = Math.max(0, hp - dmg);
+  const dx = P.x - d.x, dz = P.z - d.z, dist = Math.hypot(dx, dz) || 1;
+  pkb = { x: dx / dist * 7, z: dz / dist * 7, t: 0.14 };
+  shake = 0.15;
+  hero.hurt();
+  floatText(P.x, 1.5, P.z, `-${dmg}`, '#ff6b6b');
+  updateHud();
+  mp.channel.send({ type: 'broadcast', event: 'ouch', payload: { id: mp.id, dmg, hp, mhp: stats.hp } });
+  if (hp <= 0) knockedOut(d);
+}
+function onOuch(d) {
+  const g = ghosts.get(d.id);
+  if (!g) return;
+  g.hp = d.hp; g.mhp = d.mhp;
+  floatText(g.x, 1.15, g.z, `-${d.dmg}`, "#ffffff");
+}
+function onKo(d) {
+  const g = ghosts.get(d.id);
+  if (g) { g.dead = true; g.hp = 0; burst(g.x, 0.8, g.z, '#ff5a5a', 16); }
+  if (d.by === mp.id) { arena.kills++; saveArena(); floatText(P.x, 2.2, P.z, `You took down ${d.name}!`, '#c8ff2e'); hero.emote('happy', 1); }
+  killFeed(d.byName, d.magic, d.name, d.by === mp.id);
+}
+function killFeed(by, magic, victim, mine, meDied) {
+  const el = document.createElement('div');
+  el.className = 'kill' + (mine || meDied ? ' mine' : '');
+  el.innerHTML = `<span class="${mine ? 'me' : 'them'}">${safeText(by)}</span><span>${magic ? '&#128293;' : '&#9876;&#65039;'}</span><span class="${meDied ? 'me' : 'them'}">${safeText(victim)}</span>`;
+  const feed = $('killFeed');
+  feed.prepend(el);
+  while (feed.children.length > 4) feed.lastChild.remove();
+  setTimeout(() => { el.style.opacity = 0; }, 6000);
+  setTimeout(() => el.remove(), 6600);
+}
+function knockedOut(d) {
+  fainted = true;
+  arena.deaths++;
+  saveArena();
+  mp.channel.send({ type: 'broadcast', event: 'ko', payload: { id: mp.id, name: mp.name, by: d.by, byName: d.name, weapon: d.weapon, magic: d.magic } });
+  killFeed(d.name, d.magic, mp.name, false, true);
+  burst(P.x, 0.8, P.z, '#ff5a5a', 16);
+  $('deathBy').textContent = `${d.name}'s ${d.weapon}`;
+  $('deathStats').textContent = `This visit: ${arena.kills} kill${arena.kills === 1 ? '' : 's'} · ${arena.deaths} death${arena.deaths === 1 ? '' : 's'}`;
+  $('death').hidden = false;
+  const CITY = '/game/world3d/?area=city&from=respawn';
+  let left = 3;
+  const tick = () => {
+    $('deathCount').textContent = `Respawning at Taproot City plaza in ${left}...`;
+    if (left-- <= 0) goTo(CITY); else setTimeout(tick, 1000);
+  };
+  tick();
+  $('againBtn').onclick = () => goTo('/game/world3d/?area=arena&from=city');
+  $('cityBtn').onclick = () => goTo(CITY);
+}
+if (ARENA) {
+  $('arenaBar').hidden = false;
+  chatLine('', 'Welcome to the arena: player hits do damage in here. Walk out the south gate to leave.', true);
 }
 
 /* ---------- input: keyboard, drag to look, touch joystick on the left half ---------- */
@@ -2659,15 +3015,18 @@ addEventListener('keydown', (e) => {
   if ((e.code === 'KeyT' || e.code === 'Enter') && !modal) { e.preventDefault(); openChat(); return; }
   keys[e.code] = true;
   if (modal) { if (e.code === 'Escape' || e.code === 'KeyF') closeModal(); return; } // a shop / crafting panel is open
+  if (e.code === 'KeyU') setSprint(!sprintOn);
+  else if (sprintOn && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) { setSprint(false); shiftCancel = true; }
   if (e.code === 'Space') jump();
-  if (e.code === 'KeyJ' || e.code === 'KeyK') swing();
+  if (e.code === 'KeyJ' || e.code === 'KeyK' || e.code === 'Quote') swing('R');
+  if (e.code === 'Semicolon') swing('L');
   if (e.code === 'KeyH') drinkBest();
   if (e.code === 'KeyB') toggleBag();
   if (e.code === 'KeyC') cycleCam();
   if (e.code === 'KeyF' && action) action.run();
   if (e.code === 'Escape') toggleBag(false);
 });
-addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('keyup', (e) => { keys[e.code] = false; if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') shiftCancel = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 let drag = null, joy = null;
 canvas.addEventListener('pointerdown', (e) => {
@@ -2699,7 +3058,7 @@ $('jumpBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); jump()
 $('sailBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); if (action) action.run(); });
 $('shopClose').addEventListener('click', closeModal);
 $('shopTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b && modal) { modal.tab = b.dataset.tab; renderModal(); } });
-$('shopList').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b) shopAct(b.dataset.act, b.dataset.id, b.dataset.price || b.dataset.n); });
+$('shopList').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b) shopAct(b.dataset.act, b.dataset.id, b.dataset.price || b.dataset.n || b.dataset.slot); });
 $('bagGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-use]'); if (b) drink(b.dataset.use); });
 $('camBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); cycleCam(); });
 $('bagBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); toggleBag(); });
@@ -2726,7 +3085,7 @@ function update(dt, now) {
   if (joy && !fainted) { fx += joy.fx; fy += joy.fy; }
   camYaw += (k('KeyQ') - k('KeyE')) * 2.2 * dt;
   const moving = Math.hypot(fx, fy) > 0.15;
-  const boosting = moving && (keys.ShiftLeft || keys.ShiftRight) && !nitroLock && nitro > 0;
+  const boosting = moving && (sprintOn || ((keys.ShiftLeft || keys.ShiftRight) && !shiftCancel)) && !nitroLock && nitro > 0;
   if (boosting) { nitro -= dt * 0.12; if (nitro <= 0) { nitro = 0; nitroLock = true; } }
   else { nitro = Math.min(1, nitro + dt * 0.3); if (nitroLock && nitro > 0.25) nitroLock = false; }
   if (moving) {
@@ -2753,14 +3112,16 @@ function update(dt, now) {
 
   // 3D hero: it reads its own speed from how the root moves; looks at the nearest monster or townsfolk
   if (P.atk >= 0) { P.atk += dt / 0.38; if (P.atk >= 1) P.atk = -1; }
+  if (P.atkL >= 0) { P.atkL += dt / 0.38; if (P.atkL >= 1) P.atkL = -1; }
   let look = null, ld = 6;
   for (const mo of monsters) { const d = Math.hypot(mo.x - P.x, mo.z - P.z); if (!mo.dead && d < ld) { ld = d; look = mo; } }
   for (const n of npcs) { const d = Math.hypot(n.x - P.x, n.z - P.z); if (d < Math.min(ld, 4)) { ld = d; look = n; } }
   hero.root.position.set(P.x, P.y, P.z);
   hero.root.rotation.y = P.heading;
-  hero.update(dt, { atk: P.atk, lookAt: look, air: P.y > 0.001, vy: P.vy });
-  hero.root.visible = !(inv > 0 && Math.floor(inv / 0.08) % 2);
+  hero.update(dt, { atk: P.atk, atkL: P.atkL, lookAt: look, air: P.y > 0.001, vy: P.vy });
+  hero.root.visible = !(ARENA && fainted) && !(inv > 0 && Math.floor(inv / 0.08) % 2);
   attackCd -= dt;
+  attackCdL -= dt;
   inv -= dt;
   updateMultiplayer(dt, now);
 
@@ -2953,7 +3314,8 @@ function update(dt, now) {
   // HUD bits that change every frame
   $('nitroFill').style.width = `${nitro * 100}%`;
   $('nitroFill').style.opacity = nitroLock ? 0.4 : 1;
-  $('nitroText').textContent = nitro >= 1 ? 'Ready' : `${Math.round(nitro * 100)}%`;
+  const nt = sprintOn ? `ON ${Math.round(nitro * 100)}%` : nitro >= 1 ? 'Ready' : `${Math.round(nitro * 100)}%`;
+  if ($('nitroText').textContent !== nt) $('nitroText').textContent = nt;
   drawMinimap(now);
 
   // stitched maps: the area name follows you as you walk from one district into the next
@@ -2969,12 +3331,16 @@ function update(dt, now) {
     edge === 'n' ? P.z <= 0.6 && gx >= a && gx <= b : edge === 's' ? P.z >= MAP_H - 0.3 && gx >= a && gx <= b
       : (edge === 'w' ? P.x <= 0.45 : P.x >= MAP_W - 0.45) && gz >= a && gz <= b)
     || (A.doors || []).find((d) => gx >= d.x && gx < d.x + d.w && gz >= d.y && gz < d.y + d.h);
-  if (!leaving && exit) { leaving = true; $('fade').style.opacity = 1; setTimeout(() => { location.href = exit.href; }, 350); }
+  if (exit) goTo(exit.href);
 }
 
 SPAWN_LIST.forEach((type) => spawnMonster(type));
 // debug hook for tests and screenshots: __world3d.tp(x, z) teleports, .P is the player state
-window.__world3d = { P, ghosts, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, size: [MAP_W, MAP_H] };
+window.__world3d = { P, ghosts, arena, hp: () => hp, mp, monsters, drops, field: () => field, hero: () => hero, fireballs, tp: (x, z, yaw) => { P.x = x; P.z = z; if (yaw !== undefined) camYaw = yaw; }, cam: (dist, pitch) => { camDistT = camDist = dist; camPitchT = camPitch = pitch; }, size: [MAP_W, MAP_H], info: () => { // one full frame's draw calls and triangles (all passes, shadows included)
+  renderer.info.autoReset = false; renderer.info.reset(); composer.render();
+  const r = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+  renderer.info.autoReset = true; return r;
+} };
 updateHud();
 renderBag();
 (function frame() {
