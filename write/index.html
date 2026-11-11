@@ -8,21 +8,32 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="blog-post-container" style="max-width:720px;">
+  <div class="blog-post-container write-wrap">
     <h1 class="blog-post-title">New Post</h1>
-    <form id="write-form" class="feedback-form">
-      <input type="text" id="post-title" class="feedback-input" placeholder="Title" required>
-      <select id="post-category" class="feedback-input">
-        <option value="technical">Technical</option>
-        <option value="lifestyle">Lifestyle</option>
-      </select>
-      <input type="text" id="slug-preview" class="feedback-input" placeholder="slug" readonly tabindex="-1">
-      <textarea id="post-body" class="feedback-textarea" style="min-height:320px;" placeholder="Write. Blank line = new paragraph." required></textarea>
-      <input type="password" id="publish-pass" class="feedback-input" placeholder="Publish password" required autocomplete="off">
-      <button type="submit" class="feedback-submit">Publish</button>
-      <div id="write-error" class="feedback-error" style="display:none;"></div>
-      <div id="write-success" style="display:none;"></div>
-    </form>
+    <div class="write-grid">
+      <form id="write-form" class="feedback-form">
+        <input type="text" id="post-title" class="feedback-input" placeholder="Title" required>
+        <select id="post-category" class="feedback-input">
+          <option value="technical">Technical</option>
+          <option value="lifestyle">Lifestyle</option>
+        </select>
+        <input type="text" id="slug-preview" class="feedback-input" placeholder="slug" readonly tabindex="-1">
+        <div id="blocks"></div>
+        <input type="file" id="img-file" accept="image/*" hidden>
+        <input type="password" id="publish-pass" class="feedback-input" placeholder="Publish password" required autocomplete="off">
+        <div class="write-actions">
+          <button type="submit" class="feedback-submit">Publish</button>
+          <button type="button" id="copy-x" class="feedback-submit write-secondary">Copy for X</button>
+        </div>
+        <div id="write-error" class="feedback-error" style="display:none;"></div>
+        <div id="write-success" style="display:none;"></div>
+      </form>
+      <article class="blog-post write-preview">
+        <div class="write-label">Preview</div>
+        <h1 class="blog-post-title" id="pv-title"></h1>
+        <div class="blog-content" id="pv-body"></div>
+      </article>
+    </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="/supabase-config.js"></script>

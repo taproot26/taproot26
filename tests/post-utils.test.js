@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { slugify, renderParagraphs, formatPostDate } = require('../post-utils.js');
+const { slugify, renderParagraphs, toPlainText, formatPostDate } = require('../post-utils.js');
 
 test('slugify lowercases and hyphenates', () => {
   assert.equal(slugify('My New Post'), 'my-new-post');
@@ -28,4 +28,19 @@ test('renderParagraphs ignores extra blank lines and trailing whitespace', () =>
 
 test('formatPostDate renders long month day year', () => {
   assert.equal(formatPostDate('2026-07-09T00:30:00Z'), 'July 9, 2026');
+});
+
+test('renderParagraphs turns an image line into a figure with caption', () => {
+  assert.equal(
+    renderParagraphs('one\n\n![a beach](https://x.co/a.jpg)\n\ntwo'),
+    '<p>one</p><figure><img src="https://x.co/a.jpg" alt="a beach" loading="lazy"><figcaption>a beach</figcaption></figure><p>two</p>'
+  );
+});
+
+test('renderParagraphs leaves non-https image lines as escaped text', () => {
+  assert.equal(renderParagraphs('![x](javascript:alert(1))'), '<p>![x](javascript:alert(1))</p>');
+});
+
+test('toPlainText swaps images for [image: url] placeholders', () => {
+  assert.equal(toPlainText('one\n\n![c](https://x.co/a.jpg)'), 'one\n\n[image: https://x.co/a.jpg]');
 });
