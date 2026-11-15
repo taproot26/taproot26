@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 globalThis.location = { search: '?area=mine1&solo=1' };
-const { SOLO, soloKey, withSolo, installSolo } = createRequire(import.meta.url)('../game/world3d/solo.js');
+// solo.js is a plain browser script (world3d/ is "type": "module", so it can't be require()d): run it as one
+vm.runInThisContext(readFileSync(new URL('../game/world3d/solo.js', import.meta.url), 'utf8'));
+const { SOLO, soloKey, withSolo, installSolo } = globalThis;
 
 const fakeStorage = (init) => {
   const map = new Map(Object.entries(init));

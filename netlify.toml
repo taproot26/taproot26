@@ -1,0 +1,62 @@
+[build]
+  publish = "."
+  command = ""
+  functions = "netlify/functions"
+
+# The game API's code lives in supabase/functions/game (the live game runs it as a Supabase Edge
+# Function); this node adapter loads it at runtime, which the bundler can't see on its own.
+[functions]
+  included_files = ["supabase/functions/game/**"]
+
+# The site is just the game.
+[[redirects]]
+  from = "/"
+  to = "/game/"
+  status = 302
+  force = true
+
+# Solo mode: no account, no multiplayer, plays offline.
+[[redirects]]
+  from = "/solo"
+  to = "/game/world3d/?solo=1"
+  status = 302
+  force = true
+
+# Game API (login, signup, save) -> Netlify function wrapping api/game/[action].js
+[[redirects]]
+  from = "/api/game/:action"
+  to = "/.netlify/functions/game-api?action=:action"
+  status = 200
+  force = true
+
+# Old 2D world/city routes now live in the 3D world.
+[[redirects]]
+  from = "/game/world"
+  to = "/game/world3d/"
+  status = 302
+  force = true
+[[redirects]]
+  from = "/game/world/"
+  to = "/game/world3d/"
+  status = 302
+  force = true
+[[redirects]]
+  from = "/game/world/index.html"
+  to = "/game/world3d/"
+  status = 302
+  force = true
+[[redirects]]
+  from = "/game/city"
+  to = "/game/world3d/?area=city"
+  status = 302
+  force = true
+[[redirects]]
+  from = "/game/city/"
+  to = "/game/world3d/?area=city"
+  status = 302
+  force = true
+[[redirects]]
+  from = "/game/city/index.html"
+  to = "/game/world3d/?area=city"
+  status = 302
+  force = true

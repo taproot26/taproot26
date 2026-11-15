@@ -1,7 +1,9 @@
+// Works as a browser <script> (window.GAME), a CommonJS module (node), and an ES module (the
+// Supabase Edge Function, where `this` is undefined at the top level: globalThis.GAME).
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.GAME = factory();
-})(this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const SLOTS = ['head', 'eyes', 'body', 'rhand', 'lhand', 'feet', 'pet'];
   const STAT_KEYS = ['hp', 'atk', 'def', 'mag', 'spd'];
   const STAT_LABELS = { hp: 'HP', atk: 'ATK', def: 'DEF', mag: 'MAG', spd: 'SPD' };

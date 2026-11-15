@@ -23,12 +23,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { makeHero3D } from '/game/lib/hero3d.js';
 import { toon, buildIslands, buildPlayerBoat, buildGalleon, buildBarrel, buildGull, buildDolphin, jollyTexture } from './world.js';
+import { BARREL_GOLD, BARREL_SLOTS, BARREL_RESPAWN_MS, SEA_R, barrelSpot } from '../world3d/economy.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-const SEA_R = 420; // the sea ends here (fog hides the edge)
 
 /* ---------- save data ---------- */
 const FIELD_KEY = 'taproot_field', LOOT_KEY = 'taproot_sea_loot';
@@ -184,15 +184,17 @@ const galleons = [[60, -120, 70, 0.03], [-120, -20, 90, -0.025], [160, 20, 60, 0
 });
 
 /* ---------- floating barrels (gold), gulls, dolphins ---------- */
-const inIsland = (x, z, pad) => islands.some((I) => I.colliders.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r + pad));
-function openSea(pad = 10) {
-  for (let i = 0; i < 300; i++) {
-    const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * (SEA_R - 60), x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (!inIsland(x, z, pad)) return [x, z];
-  }
-  return [0, 60];
-}
-const barrels = Array.from({ length: 26 }, () => { const g = buildBarrel(); scene.add(g); const [x, z] = openSea(); return { g, x, z, ph: Math.random() * 6, gone: 0 }; });
+// Each barrel slot floats where economy.js's barrelSpot() says for how many times it has been taken,
+// so the server can check a claim (see 'barrel' there); the count comes back with every state.
+const barrelGen = {};
+const barrels = Array.from({ length: BARREL_SLOTS }, (_, slot) => {
+  const g = buildBarrel(); scene.add(g);
+  const [x, z] = barrelSpot(slot, 0);
+  return { slot, g, x, z, ph: Math.random() * 6, gone: 0 };
+});
+const placeBarrel = (b) => { [b.x, b.z] = barrelSpot(b.slot, barrelGen[b.slot] || 0); };
+// for the browser tests (tests/economy.e2e.mjs)
+window.__sea3d = { B, barrels, barrelGen, field: () => field };
 const gulls = Array.from({ length: 16 }, (_, i) => {
   const b = buildGull(), I = islands[i % islands.length];
   scene.add(b.g);
@@ -234,6 +236,18 @@ function floatText(x, y, z, msg, color) {
 }
 const treasures = islands.filter((I) => I.treasure);
 const updateHud = () => { $('goldText').textContent = field.gold; $('foundText').textContent = `${treasures.filter((I) => looted.includes(I.id)).length}/${treasures.length}`; };
+// The server keeps the gold and the opened chests: take its word whenever it answers.
+Ledger.on('state', (st) => {
+  Object.assign(field, { gold: st.econ.gold, xp: st.econ.xp, kills: st.econ.kills, bag: { ...st.econ.bag } });
+  looted.splice(0, looted.length, ...(st.econ.loot || []));
+  for (const b of barrels) { // the server's count wins (another tab, or a claim it turned down)
+    const g = (st.econ.barrels || {})[b.slot] || 0;
+    if (g !== (barrelGen[b.slot] || 0)) { barrelGen[b.slot] = g; if (!b.gone) placeBarrel(b); }
+  }
+  for (const I of treasures) if (I.chest && looted.includes(I.id)) { scene.remove(I.chest); I.chest = null; }
+  updateHud();
+});
+Ledger.load();
 updateHud();
 
 /* ---------- input ---------- */
@@ -303,6 +317,7 @@ function loot(I) {
   I.chest = null;
   looted.push(I.id);
   field.gold += I.treasure;
+  Ledger.act({ t: 'chest', id: I.id });
   save();
   updateHud();
   floatText(B.x, 5, B.z, `+${I.treasure} gold! Treasure found`, '#ffd34a');
@@ -429,13 +444,15 @@ function update(dt) {
 
   // barrels bob; sail through one for gold
   for (const b of barrels) {
-    if (b.gone > 0) { b.gone -= dt; if (b.gone <= 0) { [b.x, b.z] = openSea(); b.g.visible = true; } continue; }
+    if (b.gone > 0) { b.gone -= dt; if (b.gone <= 0) { placeBarrel(b); b.g.visible = true; } continue; }
     b.g.position.set(b.x, waveH(b.x, b.z, t) + 0.1, b.z);
     b.g.rotation.set(Math.sin(t + b.ph) * 0.3, t * 0.2 + b.ph, Math.cos(t * 0.8 + b.ph) * 0.3);
     if (Math.hypot(b.x - B.x, b.z - B.z) < 3) {
-      b.gone = 25; b.g.visible = false;
-      field.gold += 3; save(); updateHud();
-      floatText(b.x, 3, b.z, '+3 gold', '#ffd34a');
+      b.gone = BARREL_RESPAWN_MS / 1000 + 0.5; b.g.visible = false;
+      barrelGen[b.slot] = (barrelGen[b.slot] || 0) + 1;
+      field.gold += BARREL_GOLD; save(); updateHud();
+      Ledger.act({ t: 'barrel', slot: b.slot, at: Math.round(performance.timeOrigin + performance.now()) });
+      floatText(b.x, 3, b.z, `+${BARREL_GOLD} gold`, '#ffd34a');
       splash(b.x, b.z, 8, 0.3);
     }
   }

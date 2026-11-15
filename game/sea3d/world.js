@@ -9,6 +9,7 @@
    ============================================================================ */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { SEA_TREASURE, SEA_ISLES } from '../world3d/economy.js'; // the server pays chests out and checks barrels from the same tables
 
 export const GRAD = (() => {
   const t = new THREE.DataTexture(new Uint8Array([95, 175, 255]), 3, 1, THREE.RedFormat);
@@ -317,18 +318,19 @@ const KIND = {
 };
 
 // The archipelago: harbour near the start, the rest spread around it.
+const isle = (id) => { const [x, z, r] = SEA_ISLES[id]; return { x, z, r }; };
 export const ISLANDS = [
-  { id: 'harbor', name: 'Taproot Docks', kind: 'harbor', x: 0, z: -40, r: 24 },
-  { id: 'fort', name: 'Fort Cutlass', kind: 'fort', x: 170, z: -150, r: 28 },
-  { id: 'skull', name: 'Skull Rock', kind: 'skull', x: -180, z: -120, r: 18 },
-  { id: 'arch', name: 'The Old Arch', kind: 'arch', x: -90, z: 110, r: 12 },
-  { id: 'wreck', name: 'Wreck Reef', kind: 'wreck', x: 120, z: 130, r: 14, treasure: 40 },
-  { id: 'village', name: 'Palmhaven', kind: 'village', x: -250, z: 60, r: 26 },
-  { id: 'lonely', name: 'Lonely Key', kind: 'sandbar', x: 55, z: 45, r: 8, treasure: 25 },
-  { id: 'gull', name: 'Gull Cay', kind: 'sandbar', x: -70, z: -210, r: 9, treasure: 25 },
-  { id: 'verde', name: 'Mount Verde', kind: 'peak', x: 270, z: 70, r: 32 },
-  { id: 'doubloon', name: 'Doubloon Spit', kind: 'sandbar', x: 230, z: -290, r: 8, treasure: 30 },
-  { id: 'beacon', name: 'Beacon Isle', kind: 'lighthouse', x: 40, z: -240, r: 12 },
+  { id: 'harbor', name: 'Taproot Docks', kind: 'harbor', ...isle('harbor') },
+  { id: 'fort', name: 'Fort Cutlass', kind: 'fort', ...isle('fort') },
+  { id: 'skull', name: 'Skull Rock', kind: 'skull', ...isle('skull') },
+  { id: 'arch', name: 'The Old Arch', kind: 'arch', ...isle('arch') },
+  { id: 'wreck', name: 'Wreck Reef', kind: 'wreck', ...isle('wreck'), treasure: SEA_TREASURE.wreck },
+  { id: 'village', name: 'Palmhaven', kind: 'village', ...isle('village') },
+  { id: 'lonely', name: 'Lonely Key', kind: 'sandbar', ...isle('lonely'), treasure: SEA_TREASURE.lonely },
+  { id: 'gull', name: 'Gull Cay', kind: 'sandbar', ...isle('gull'), treasure: SEA_TREASURE.gull },
+  { id: 'verde', name: 'Mount Verde', kind: 'peak', ...isle('verde') },
+  { id: 'doubloon', name: 'Doubloon Spit', kind: 'sandbar', ...isle('doubloon'), treasure: SEA_TREASURE.doubloon },
+  { id: 'beacon', name: 'Beacon Isle', kind: 'lighthouse', ...isle('beacon') },
 ];
 
 export function buildIslands(scene, looted) {

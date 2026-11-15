@@ -211,6 +211,12 @@
   .icard[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 12px rgba(212, 169, 79, 0.2); }
   .icard.unequip { border-style: dashed; }
   body.embed #landing { visibility: hidden; }
+  /* inside the world's Gear overlay: no page backdrop, the world's own Done button closes it */
+  body.embed { background: transparent; padding: 0; }
+  body.embed .bg { display: none; }
+  body.embed #armory .wrap { padding: 16px 18px; }
+  body.embed #armBack { display: none; }
+  body.embed #armory .top { padding-right: 84px; } /* room for the Done button */
   .icard.unequip:hover { border-color: var(--dim); transform: translateY(-2px); }
   .arm-footer { display: flex; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 
@@ -358,6 +364,8 @@
   </div>
 </main>
 
+<script src="/game/lib/ledger.js"></script>
+<script>Ledger.init();</script>
 <script src="/game/items.js"></script>
 <script src="/game/sprite.js"></script>
 <script>
@@ -450,7 +458,7 @@
   async function api(action, body) {
     const key = getKey();
     const get = action === 'me';
-    const res = await fetch('/api/game/' + action, {
+    const res = await fetch(Ledger.api + action, {
       method: get ? 'GET' : 'POST',
       headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: 'Bearer ' + key } : {}) },
       body: get ? undefined : JSON.stringify(body || {}),
@@ -461,11 +469,10 @@
   }
 
   function enterGame(user) {
+    // Line this browser up with the account's progress (kept on the server) before anything reads it.
+    Ledger.adopt(user);
     player.username = user.username;
-    const allItems = Object.keys(ITEMS);
-    const inv = user.inventory || [];
-    const missing = allItems.filter((id) => inv.indexOf(id) === -1);
-    player.inventory = missing.length ? inv.concat(missing) : inv;
+    player.inventory = (user.inventory || []).filter((id) => ITEMS[id]); // only the gear this account owns
     player.hasChar = !!user.character;
     $('who').textContent = user.username;
     if (user.character) {
@@ -532,7 +539,9 @@
   $('save').addEventListener('click', async () => {
     $('saveMsg').textContent = 'Saving...';
     try {
-      await api('save', { character: S });
+      const saved = await api('save', { character: S });
+      if (saved.inventory) player.inventory = saved.inventory.filter((id) => ITEMS[id]);
+      if (saved.character) S.equipment = saved.character.equipment; // gear you don't own is taken off
       player.hasChar = true;
       try { localStorage.setItem('taproot_character', JSON.stringify(S)); } catch (e) {}
       renderHome();
@@ -540,6 +549,7 @@
     } catch (err) { $('saveMsg').textContent = err.status === 401 ? 'Session expired, sign in again' : err.message; }
   });
   ['logout', 'logout2'].forEach((id) => $(id).addEventListener('click', async () => {
+    await Ledger.signOut().catch(() => {}); // send anything unsent, then clear this account's progress from the browser
     await api('logout').catch(() => {});
     setKey(null);
     try { localStorage.removeItem('taproot_character'); } catch (e) {}
